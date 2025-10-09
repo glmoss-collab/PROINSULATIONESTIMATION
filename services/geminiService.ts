@@ -77,6 +77,21 @@ const drawingAnalysisSchema = {
     }
 };
 
+const parseJsonResponse = <T>(response: GenerateContentResponse): T => {
+  const jsonText = response.text?.trim();
+
+  if (!jsonText) {
+    throw new Error('Gemini response did not include a JSON payload.');
+  }
+
+  try {
+    return JSON.parse(jsonText) as T;
+  } catch (error) {
+    console.error('Failed to parse Gemini JSON response:', error);
+    throw new Error('Unable to parse Gemini response as JSON.');
+  }
+};
+
 export const analyzeSpecification = async (file: File): Promise<GeminiSpecAnalysis> => {
   const systemInstruction = "You are an AI-powered HVAC mechanical insulation estimation service for Guaranteed Insulation. Respond ONLY with the JSON object as defined by the schema.";
   
@@ -99,8 +114,7 @@ export const analyzeSpecification = async (file: File): Promise<GeminiSpecAnalys
     },
   });
 
-  const jsonText = response.text.trim();
-  return JSON.parse(jsonText);
+  return parseJsonResponse<GeminiSpecAnalysis>(response);
 };
 
 export const analyzeDrawings = async (file: File): Promise<GeminiDrawingAnalysis> => {
@@ -126,6 +140,5 @@ export const analyzeDrawings = async (file: File): Promise<GeminiDrawingAnalysis
         }
     });
 
-    const jsonText = response.text.trim();
-    return JSON.parse(jsonText);
+    return parseJsonResponse<GeminiDrawingAnalysis>(response);
 };
