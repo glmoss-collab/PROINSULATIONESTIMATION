@@ -1,0 +1,5 @@
+{
+  "name": "HVAC Insulation Quote Generator",
+  "description": "An AI-powered service to analyze project specifications and drawings, perform takeoffs, and generate professional quotes for HVAC mechanical insulation projects.",
+  "requestFramePermissions": []
+}
