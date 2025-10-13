@@ -19,6 +19,7 @@ const specAnalysisSchema = {
   properties: {
     ductwork: {
       type: Type.OBJECT,
+      required: ["material", "thickness", "facing"],
       properties: {
         material: { type: Type.STRING },
         thickness: { type: Type.STRING },
@@ -27,6 +28,7 @@ const specAnalysisSchema = {
     },
     piping: {
       type: Type.OBJECT,
+      required: ["material", "thickness", "jacketing"],
       properties: {
         material: { type: Type.STRING },
         thickness: { type: Type.STRING },
@@ -35,6 +37,7 @@ const specAnalysisSchema = {
     },
     outdoor: {
         type: Type.OBJECT,
+        required: ["jacketing", "requirements"],
         properties: {
             jacketing: { type: Type.STRING },
             requirements: { type: Type.STRING },
@@ -45,6 +48,7 @@ const specAnalysisSchema = {
       description: "A brief summary of all key insulation requirements.",
     },
   },
+  required: ["ductwork", "piping", "outdoor", "summary"],
 };
 
 const drawingAnalysisSchema = {
@@ -54,6 +58,7 @@ const drawingAnalysisSchema = {
             type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
+                required: ["size", "length", "fittings"],
                 properties: {
                     size: { type: Type.STRING, description: "e.g., '24x20'" },
                     length: { type: Type.NUMBER, description: "Linear feet" },
@@ -65,6 +70,7 @@ const drawingAnalysisSchema = {
             type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
+                required: ["size", "length", "fittings"],
                 properties: {
                     size: { type: Type.STRING, description: "e.g., '2\" CHW'" },
                     length: { type: Type.NUMBER, description: "Linear feet" },
@@ -74,7 +80,8 @@ const drawingAnalysisSchema = {
         },
         scale: { type: Type.STRING, description: "Drawing scale, e.g., '1/4\" = 1'-0\"'" },
         notes: { type: Type.STRING, description: "Any important notes, ambiguities, or areas of concern." }
-    }
+    },
+    required: ["ductwork", "piping", "scale", "notes"],
 };
 
 export const analyzeSpecification = async (file: File): Promise<GeminiSpecAnalysis> => {
@@ -91,7 +98,7 @@ export const analyzeSpecification = async (file: File): Promise<GeminiSpecAnalys
   
   const response: GenerateContentResponse = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
-    contents: [{ role: 'user', parts: parts }],
+    contents: { parts: parts },
     config: {
       systemInstruction: systemInstruction,
       responseMimeType: 'application/json',
@@ -118,14 +125,7 @@ export const analyzeDrawings = async (file: File): Promise<GeminiDrawingAnalysis
 
     const response: GenerateContentResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: [{ role: 'user', parts: parts }],
+        contents: { parts: parts },
         config: {
             systemInstruction: systemInstruction,
             responseMimeType: 'application/json',
-            responseSchema: drawingAnalysisSchema,
-        }
-    });
-
-    const jsonText = response.text.trim();
-    return JSON.parse(jsonText);
-};
