@@ -77,17 +77,68 @@ const drawingAnalysisSchema = {
     }
 };
 
-const parseJsonResponse = <T>(response: GenerateContentResponse): T => {
-  const jsonText = response.text?.trim();
+const sanitizeJsonText = (raw: string): string => {
+  let cleaned = raw.trim();
 
-  if (!jsonText) {
-    throw new Error('Gemini response did not include a JSON payload.');
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
   }
+
+  const braceStart = cleaned.indexOf('{');
+  const braceEnd = cleaned.lastIndexOf('}');
+  const bracketStart = cleaned.indexOf('[');
+  const bracketEnd = cleaned.lastIndexOf(']');
+
+  if (braceStart !== -1 && braceEnd !== -1 && braceStart < braceEnd) {
+    cleaned = cleaned.slice(braceStart, braceEnd + 1);
+  } else if (bracketStart !== -1 && bracketEnd !== -1 && bracketStart < bracketEnd) {
+    cleaned = cleaned.slice(bracketStart, bracketEnd + 1);
+  }
+
+  return cleaned.trim();
+};
+
+const extractResponseText = (response: GenerateContentResponse): string => {
+  if (response.promptFeedback?.blockReason) {
+    throw new Error(`Gemini blocked the request: ${response.promptFeedback.blockReason}`);
+  }
+
+  const segments: string[] = [];
+
+  if (response.text?.trim()) {
+    segments.push(response.text.trim());
+  }
+
+  const candidates = response.candidates;
+  if (candidates) {
+    for (const candidate of candidates) {
+      const parts = candidate.content?.parts;
+      if (!parts) continue;
+      for (const part of parts) {
+        if ('text' in part && part.text?.trim()) {
+          segments.push(part.text.trim());
+        }
+      }
+    }
+  }
+
+  const combined = segments.join('\n').trim();
+
+  if (!combined) {
+    throw new Error('Gemini response did not include any text content to parse.');
+  }
+
+  return combined;
+};
+
+const parseJsonResponse = <T>(response: GenerateContentResponse): T => {
+  const rawText = extractResponseText(response);
+  const jsonText = sanitizeJsonText(rawText);
 
   try {
     return JSON.parse(jsonText) as T;
   } catch (error) {
-    console.error('Failed to parse Gemini JSON response:', error);
+    console.error('Failed to parse Gemini JSON response:', error, '\nRaw response:', rawText);
     throw new Error('Unable to parse Gemini response as JSON.');
   }
 };
