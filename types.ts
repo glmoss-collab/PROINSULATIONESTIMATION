@@ -1,7 +1,7 @@
 
 export enum Step {
-  ProjectInfo,
   Documents,
+  ProjectInfo,
   Takeoff,
   Review,
   Quote,
@@ -56,6 +56,12 @@ export interface BillOfMaterialsItem {
 }
 
 export interface GeminiSpecAnalysis {
+  projectInfo?: {
+    projectName?: string;
+    location?: string;
+    customer?: string;
+    date?: string;
+  };
   ductwork: { material: string; thickness: string; facing: string; };
   piping: { material: string; thickness: string; jacketing: string; };
   outdoor: { jacketing: string; requirements: string; };

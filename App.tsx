@@ -65,7 +65,7 @@ const Alert: React.FC<{ message: string; type: 'error' | 'info' }> = ({ message,
 // --- MAIN APPLICATION ---
 
 export default function App() {
-  const [currentStep, setCurrentStep] = useState<Step>(Step.ProjectInfo);
+  const [currentStep, setCurrentStep] = useState<Step>(Step.Documents);
   const [error, setError] = useState<string | null>(null);
 
   // State for all quote data
@@ -109,6 +109,17 @@ export default function App() {
     try {
       const result = await analyzeSpecification(file);
       setSpecAnalysis(result);
+
+      if (result.projectInfo) {
+        const updates: Partial<ProjectInfo> = {};
+        if (result.projectInfo.projectName) updates.projectName = result.projectInfo.projectName;
+        if (result.projectInfo.location) updates.location = result.projectInfo.location;
+        if (result.projectInfo.customer) updates.customer = result.projectInfo.customer;
+        if (result.projectInfo.date) updates.date = result.projectInfo.date;
+
+        setProjectInfo(prev => ({ ...prev, ...updates }));
+      }
+
     } catch (err) {
       setError('Failed to analyze specifications. Please check your API key and file format.');
       console.error(err);
@@ -142,8 +153,6 @@ export default function App() {
   // Render logic for each step
   const renderStep = () => {
     switch (currentStep) {
-      case Step.ProjectInfo:
-        return <ProjectInfoStep projectInfo={projectInfo} setProjectInfo={setProjectInfo} />;
       case Step.Documents:
         return <DocumentUploadStep
             onSpecUpload={handleSpecUpload}
@@ -153,6 +162,8 @@ export default function App() {
             isSpecLoading={isSpecLoading}
             isDrawingLoading={isDrawingLoading}
           />;
+      case Step.ProjectInfo:
+        return <ProjectInfoStep projectInfo={projectInfo} setProjectInfo={setProjectInfo} />;
       case Step.Takeoff:
         return <TakeoffEntryStep
             ductwork={ductworkTakeoff}
@@ -180,7 +191,7 @@ export default function App() {
     }
   };
 
-  const stepNames = ["Project Info", "Documents", "Takeoff", "Review & Price", "Generate Quote"];
+  const stepNames = ["Documents", "Project Info", "Takeoff", "Review & Price", "Generate Quote"];
 
   return (
     <div className="min-h-screen bg-gray-900 text-gray-100 p-4 sm:p-6 lg:p-8">

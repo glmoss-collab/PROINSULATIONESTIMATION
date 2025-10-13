@@ -17,6 +17,16 @@ const fileToGenerativePart = async (file: File) => {
 const specAnalysisSchema = {
   type: Type.OBJECT,
   properties: {
+    projectInfo: {
+        type: Type.OBJECT,
+        description: "Project identification details, typically found on the cover sheet.",
+        properties: {
+            projectName: { type: Type.STRING, description: "The official name of the project." },
+            location: { type: Type.STRING, description: "The city and state, or full address of the project." },
+            customer: { type: Type.STRING, description: "The name of the client, General Contractor, or Mechanical Contractor." },
+            date: { type: Type.STRING, description: "The specification issue date, in YYYY-MM-DD format." },
+        }
+    },
     ductwork: {
       type: Type.OBJECT,
       required: ["material", "thickness", "facing"],
@@ -87,9 +97,10 @@ const drawingAnalysisSchema = {
 export const analyzeSpecification = async (file: File): Promise<GeminiSpecAnalysis> => {
   const systemInstruction = "You are an AI-powered HVAC mechanical insulation estimation service for Guaranteed Insulation. Respond ONLY with the JSON object as defined by the schema.";
   
-  const userPrompt = `Analyze this specification PDF (Division 23) and extract key insulation requirements.
-    Focus on material types, thickness, and facing/jacketing for each system (ductwork, piping).
-    Note any special requirements like mastic, vapor barriers, or outdoor weatherproofing. Provide a concise summary.`;
+  const userPrompt = `Analyze this specification PDF (Division 23).
+    First, extract project information from the cover page: Project Name, Location, Customer/Contractor, and issue Date.
+    Second, extract key insulation requirements. Focus on material types, thickness, and facing/jacketing for each system (ductwork, piping).
+    Note any special requirements like mastic, vapor barriers, or outdoor weatherproofing. Provide a concise summary of the insulation specs.`;
 
   const parts = [
     { text: userPrompt },
@@ -129,3 +140,10 @@ export const analyzeDrawings = async (file: File): Promise<GeminiDrawingAnalysis
         config: {
             systemInstruction: systemInstruction,
             responseMimeType: 'application/json',
+            responseSchema: drawingAnalysisSchema,
+        },
+    });
+
+    const jsonText = response.text.trim();
+    return JSON.parse(jsonText);
+};
