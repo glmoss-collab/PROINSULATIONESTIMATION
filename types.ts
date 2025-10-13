@@ -65,7 +65,7 @@ export interface GeminiSpecAnalysis {
   ductwork: { material: string; thickness: string; facing: string; };
   piping: { material: string; thickness: string; jacketing: string; };
   outdoor: { jacketing: string; requirements: string; };
-  summary: string;
+  summary: string[];
 }
 
 export interface GeminiDrawingAnalysis {

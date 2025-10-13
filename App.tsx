@@ -1,5 +1,4 @@
 
-
 import React, { useState, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -20,8 +19,7 @@ import {
   ACCESSORY_PRICING,
   LABOR_RATES,
   TAKEOFF_FACTORS,
-  ACCESSORY_COVERAGE,
-  DUCT_BOARD_SHEET_LF_COVERAGE
+  ACCESSORY_COVERAGE
 } from './constants';
 
 
@@ -33,13 +31,17 @@ const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ chi
   </div>
 );
 
-const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' }> = ({ children, className = '', variant = 'primary', ...props }) => {
-  const baseClasses = 'px-6 py-2 rounded-md font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed';
+const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary', size?: 'normal' | 'sm' }> = ({ children, className = '', variant = 'primary', size = 'normal', ...props }) => {
+  const baseClasses = 'font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed rounded-md';
   const variantClasses = {
     primary: 'bg-blue-600 hover:bg-blue-500 text-white focus:ring-blue-500',
     secondary: 'bg-gray-600 hover:bg-gray-500 text-gray-200 focus:ring-gray-500',
   };
-  return <button className={`${baseClasses} ${variantClasses[variant]} ${className}`} {...props}>{children}</button>;
+   const sizeClasses = {
+      normal: 'px-6 py-2',
+      sm: 'px-3 py-1 text-sm'
+  };
+  return <button className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`} {...props}>{children}</button>;
 };
 
 const Input: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label: string }> = ({ label, id, ...props }) => (
@@ -99,6 +101,9 @@ export default function App() {
     laborAdjustment: 1.0,
     laborRate: 70,
   });
+  
+  const [quoteTemplate, setQuoteTemplate] = useState<'detailed' | 'summary'>('detailed');
+
 
   const nextStep = () => setCurrentStep(s => Math.min(s + 1, Object.keys(Step).length / 2 - 1));
   const prevStep = () => setCurrentStep(s => Math.max(s - 1, 0));
@@ -187,6 +192,8 @@ export default function App() {
             piping={pipingTakeoff}
             pricing={pricing}
             specAnalysis={specAnalysis}
+            quoteTemplate={quoteTemplate}
+            setQuoteTemplate={setQuoteTemplate}
             />;
       default:
         return <div>Unknown Step</div>;
@@ -277,7 +284,9 @@ const DocumentUploadStep: React.FC<{
               <h4 className="font-bold text-white">Analysis Summary:</h4>
               <p className="text-sm text-gray-300 mt-2"><strong>Duct:</strong> {specAnalysis.ductwork.thickness} {specAnalysis.ductwork.material} w/ {specAnalysis.ductwork.facing}</p>
               <p className="text-sm text-gray-300"><strong>Pipe:</strong> {specAnalysis.piping.thickness} {specAnalysis.piping.material} w/ {specAnalysis.piping.jacketing}</p>
-              <p className="text-sm text-gray-300 mt-2"><i>{specAnalysis.summary}</i></p>
+              <ul className="list-disc list-inside text-sm text-gray-300 mt-2 space-y-1">
+                {specAnalysis.summary.map((item, index) => <li key={index}>{item}</li>)}
+              </ul>
             </div>
           )}
         </div>
@@ -345,7 +354,7 @@ const TakeoffEntryStep: React.FC<{
                 <td className="p-1"><input type="text" value={item.size} onChange={e => handleItemChange(item.id, 'size', e.target.value, setter)} className="w-full bg-gray-800 p-2 rounded" /></td>
                 <td className="p-1"><input type="number" value={item.length} onChange={e => handleItemChange(item.id, 'length', parseFloat(e.target.value) || 0, setter)} className="w-full bg-gray-800 p-2 rounded" /></td>
                 <td className="p-1"><input type="number" value={item.fittings} onChange={e => handleItemChange(item.id, 'fittings', parseInt(e.target.value, 10) || 0, setter)} className="w-full bg-gray-800 p-2 rounded" /></td>
-                <td className="p-1 text-right"><Button variant="secondary" className="px-3 py-1 text-xs" onClick={() => removeItem(item.id, setter)}>Remove</Button></td>
+                <td className="p-1 text-right"><Button variant="secondary" size="sm" onClick={() => removeItem(item.id, setter)}>Remove</Button></td>
               </tr>
             ))}
           </tbody>
@@ -410,11 +419,13 @@ const useQuoteCalculator = (ductwork: TakeoffItem[], piping: TakeoffItem[], pric
             totalDuctSurfaceArea += getDuctSurfaceArea(d.size, lengthWithWaste);
         });
         
-        if (totalDuctLf > 0) {
+        if (totalDuctSurfaceArea > 0) {
+            const DUCT_WRAP_ROLL_SQFT_COVERAGE = 300;
+            const ductWrapRolls = Math.ceil(totalDuctSurfaceArea / DUCT_WRAP_ROLL_SQFT_COVERAGE);
             bom.push({ 
                 category: 'DUCT INSULATION', 
-                item: `1.5" Fiberglass Duct Board w/ FSK, 4' x 10' sheets`, 
-                quantity: `${Math.ceil(totalDuctLf / DUCT_BOARD_SHEET_LF_COVERAGE)} sheets (approx ${Math.round(totalDuctLf)} LF coverage)` 
+                item: `1.5" Fiberglass Duct Wrap w/ FSK`, 
+                quantity: `${ductWrapRolls} rolls (approx ${Math.round(totalDuctSurfaceArea)} SF coverage)` 
             });
         }
         
@@ -573,6 +584,8 @@ const GeneratedQuoteStep: React.FC<{
   piping: TakeoffItem[];
   pricing: PricingSettings;
   specAnalysis: GeminiSpecAnalysis | null;
+  quoteTemplate: 'detailed' | 'summary';
+  setQuoteTemplate: React.Dispatch<React.SetStateAction<'detailed' | 'summary'>>;
 }> = (props) => {
     const { lineItems, bom, grandTotal, materialWithMarkup, laborWithMarkup, subtotal, overheadAndProfitAmount, contingencyAmount } = useQuoteCalculator(props.ductwork, props.piping, props.pricing);
     
@@ -581,9 +594,79 @@ const GeneratedQuoteStep: React.FC<{
     const handlePrint = () => {
         window.print();
     };
+    
+    const QuoteHeader = () => (
+      <div className="flex justify-between items-start mb-8">
+          <div>
+              <h1 className="text-3xl font-bold">GUARANTEED INSULATION</h1>
+              <p className="text-sm">123 Insulation Way, Athens, GA 30601</p>
+          </div>
+          <div className="text-right text-sm">
+              <p><strong>Contact:</strong> Glen Moss</p>
+              <p><strong>Phone:</strong> (706) 123-4567</p>
+              <p><strong>Email:</strong> glmoss@guaranteedinsulation.com</p>
+          </div>
+      </div>
+    );
 
-    const Quote = () => {
-        // FIX: Explicitly type the accumulator in the `reduce` function to avoid potential type inference issues.
+    const ProjectInfoTable = () => (
+      <table className="w-full text-sm mb-8">
+          <tbody>
+              <tr>
+                  <td className="font-bold pr-4 py-1">Project:</td>
+                  <td className="py-1">{props.projectInfo.projectName}</td>
+                  <td className="font-bold pr-4 py-1 text-right">Date:</td>
+                  <td className="py-1 w-1/4">{props.projectInfo.date}</td>
+              </tr>
+              <tr>
+                  <td className="font-bold pr-4 py-1">Location:</td>
+                  <td className="py-1">{props.projectInfo.location}</td>
+                  <td className="font-bold pr-4 py-1 text-right">Quote #:</td>
+                  <td className="py-1">{props.projectInfo.quoteNumber}</td>
+              </tr>
+               <tr>
+                  <td className="font-bold pr-4 py-1">Customer:</td>
+                  <td className="py-1">{props.projectInfo.customer}</td>
+                  <td className="font-bold pr-4 py-1 text-right">Valid:</td>
+                  <td className="py-1">30 Days</td>
+              </tr>
+          </tbody>
+      </table>
+    );
+
+    const SummaryQuote = () => (
+      <div className="bg-white text-black p-8 font-sans printable-area">
+          <QuoteHeader />
+          <h2 className="text-2xl font-semibold mt-4 text-center border-b-2 border-black pb-2 mb-6">BUDGET PROPOSAL</h2>
+          <ProjectInfoTable />
+          
+          <div className="mb-8">
+               <h3 className="font-bold text-lg border-b border-gray-400 mb-2">SUMMARY SCOPE OF WORK</h3>
+               <p className="text-sm">Guaranteed Insulation proposes to furnish and install mechanical insulation for the systems listed below, based on the project specifications provided.</p>
+               {props.specAnalysis && (
+                  <ul className="text-sm list-disc list-inside mt-2 space-y-1">
+                      {props.specAnalysis.summary.map((item, index) => <li key={index}>{item}</li>)}
+                  </ul>
+               )}
+          </div>
+          
+          <div className="my-10 text-center">
+              <p className="text-gray-700 uppercase tracking-wider">Total Project Investment</p>
+              <p className="text-5xl font-bold tracking-tight mt-2">{grandTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
+          </div>
+
+          <div className="text-xs text-gray-600 mt-8 space-y-2">
+               <div>
+                  <h4 className="font-bold uppercase">Exclusions & Qualifications:</h4>
+                  <p>This budget proposal excludes scaffolding, lifts, demolition, permits, and sales tax. Pricing is based on project specifications dated {props.projectInfo.date} and assumes clear access to work areas during normal business hours. This quote is valid for 30 days.</p>
+              </div>
+          </div>
+      </div>
+    );
+    
+    const DetailedQuote = () => {
+        // FIX: The `reduce` call was not correctly typed, causing `items` in the `.map()` below to be of type `unknown`.
+        // By casting the initial value `{}`, TypeScript can correctly infer the type of `groupedLineItems`.
         const groupedLineItems = lineItems.reduce((acc: Record<string, CalculatedLineItem[]>, item) => {
             const category = item.category || 'Miscellaneous';
             if (!acc[category]) {
@@ -591,47 +674,13 @@ const GeneratedQuoteStep: React.FC<{
             }
             acc[category].push(item);
             return acc;
-        }, {});
+        }, {} as Record<string, CalculatedLineItem[]>);
 
         return (
             <div className="bg-white text-black p-8 font-sans printable-area">
-                 {/* Header */}
-                <div className="flex justify-between items-start mb-8">
-                    <div>
-                        <h1 className="text-3xl font-bold">GUARANTEED INSULATION</h1>
-                        <p className="text-sm">123 Insulation Way, Athens, GA 30601</p>
-                    </div>
-                    <div className="text-right text-sm">
-                        <p><strong>Contact:</strong> Glen Moss</p>
-                        <p><strong>Phone:</strong> (706) 123-4567</p>
-                        <p><strong>Email:</strong> glmoss@guaranteedinsulation.com</p>
-                    </div>
-                </div>
+                <QuoteHeader />
                 <h2 className="text-2xl font-semibold mt-4 text-center border-b-2 border-black pb-2 mb-6">MECHANICAL INSULATION PROPOSAL</h2>
-
-                {/* Project Info Table */}
-                <table className="w-full text-sm mb-8">
-                    <tbody>
-                        <tr>
-                            <td className="font-bold pr-4 py-1">Project:</td>
-                            <td className="py-1">{props.projectInfo.projectName}</td>
-                            <td className="font-bold pr-4 py-1 text-right">Date:</td>
-                            <td className="py-1 w-1/4">{props.projectInfo.date}</td>
-                        </tr>
-                        <tr>
-                            <td className="font-bold pr-4 py-1">Location:</td>
-                            <td className="py-1">{props.projectInfo.location}</td>
-                            <td className="font-bold pr-4 py-1 text-right">Quote #:</td>
-                            <td className="py-1">{props.projectInfo.quoteNumber}</td>
-                        </tr>
-                         <tr>
-                            <td className="font-bold pr-4 py-1">Customer:</td>
-                            <td className="py-1">{props.projectInfo.customer}</td>
-                            <td className="font-bold pr-4 py-1 text-right">Valid:</td>
-                            <td className="py-1">30 Days</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <ProjectInfoTable />
 
                 {/* Scope of Work */}
                 <div className="mb-8">
@@ -639,11 +688,7 @@ const GeneratedQuoteStep: React.FC<{
                     <p className="text-sm">Guaranteed Insulation shall furnish and install mechanical insulation per project specifications. All work to be performed in a neat and workmanlike manner, conforming to industry standards such as ASTM and SMACNA.</p>
                     {props.specAnalysis && (
                         <ul className="text-sm list-disc list-inside mt-2 space-y-1">
-                            <li><strong>Systems Covered:</strong> Supply Ductwork, Return Ductwork, and Piping Systems.</li>
-                            <li><strong>Ductwork Insulation:</strong> {props.specAnalysis.ductwork.thickness} {props.specAnalysis.ductwork.material} with {props.specAnalysis.ductwork.facing} facing.</li>
-                            <li><strong>Piping Insulation:</strong> {props.specAnalysis.piping.thickness} {props.specAnalysis.piping.material} with {props.specAnalysis.piping.jacketing} jacketing.</li>
-                            <li><strong>Outdoor/Exposed Systems:</strong> Shall have {props.specAnalysis.outdoor.jacketing} with {props.specAnalysis.outdoor.requirements}.</li>
-                            <li><strong>Locations:</strong> Includes mechanical rooms, ceiling spaces, and rooftop/exterior locations as shown on drawings.</li>
+                           {props.specAnalysis.summary.map((item, index) => <li key={index}>{item}</li>)}
                         </ul>
                     )}
                 </div>
@@ -714,46 +759,77 @@ const GeneratedQuoteStep: React.FC<{
         );
     }
     
-    const BillOfMaterials = () => (
-      <div className="bg-white text-black p-8 font-sans printable-area">
-        <h1 className="text-2xl font-bold mb-2">GUARANTEED INSULATION - MATERIAL ORDER LIST</h1>
-        <p><strong>Project:</strong> {props.projectInfo.projectName}</p>
-        <p><strong>Quote:</strong> {props.projectInfo.quoteNumber}</p>
-        <p><strong>Date:</strong> {props.projectInfo.date}</p>
-        
-        <div className="mt-8 space-y-6">
-          {Array.from(new Set(bom.map(item => item.category))).map(category => (
-            <div key={category}>
-              <h3 className="font-bold text-lg border-b border-gray-400 mb-2">{category}:</h3>
-              <ul className="list-none space-y-2">
-                {bom.filter(item => item.category === category).map((item, index) => (
-                  <li key={index} className="whitespace-pre-line">
-                    - {item.quantity && <>{' '}<span className="font-bold">{item.quantity}</span> -</>}{' '}
-                    {item.item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+    const Quote = () => {
+        if (props.quoteTemplate === 'summary') {
+            return <SummaryQuote />;
+        }
+        return <DetailedQuote />;
+    };
 
-        <div className="mt-12 pt-4 border-t border-black">
-            <p><strong>DELIVERY:</strong> [Date Needed]</p>
-            <p><strong>SHIP TO:</strong> {props.projectInfo.location}</p>
+    const BillOfMaterials = () => {
+      // FIX: The `reduce` call was not correctly typed, causing `items` in the `.map()` below to be of type `unknown`.
+      // By casting the initial value `{}`, TypeScript can correctly infer the type of `bomByCategory`.
+      const bomByCategory = bom.reduce((acc, item) => {
+        const category = item.category;
+        if (!acc[category]) {
+            acc[category] = [];
+        }
+        acc[category].push(item);
+        return acc;
+      }, {} as Record<string, BillOfMaterialsItem[]>);
+
+      return (
+        <div className="bg-white text-black p-8 font-sans printable-area">
+          <h1 className="text-2xl font-bold mb-2">GUARANTEED INSULATION - MATERIAL ORDER LIST</h1>
+          <p><strong>Project:</strong> {props.projectInfo.projectName}</p>
+          <p><strong>Quote:</strong> {props.projectInfo.quoteNumber}</p>
+          <p><strong>Date:</strong> {props.projectInfo.date}</p>
+          
+          <div className="mt-8 space-y-6">
+            {Object.entries(bomByCategory).sort(([categoryA], [categoryB]) => categoryA.localeCompare(categoryB)).map(([category, items]) => (
+              <div key={category}>
+                <h3 className="font-bold text-lg border-b border-gray-400 mb-2">{category}:</h3>
+                <ul className="list-none space-y-2">
+                  {items.map((item, index) => (
+                    <li key={index} className="whitespace-pre-line">
+                      - {item.quantity && <>{' '}<span className="font-bold">{item.quantity}</span> -</>}{' '}
+                      {item.item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-12 pt-4 border-t border-black">
+              <p><strong>DELIVERY:</strong> [Date Needed]</p>
+              <p><strong>SHIP TO:</strong> {props.projectInfo.location}</p>
+          </div>
         </div>
-      </div>
-    );
+      );
+    };
 
 
     return (
         <Card>
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-white">Generated Documents</h2>
-                <div className="flex gap-2 print:hidden">
-                    <Button variant={view === 'quote' ? 'primary' : 'secondary'} onClick={() => setView('quote')}>Quote</Button>
-                    <Button variant={view === 'bom' ? 'primary' : 'secondary'} onClick={() => setView('bom')}>Bill of Materials</Button>
-                    <Button onClick={handlePrint}>Print</Button>
+            <div className="flex justify-between items-center mb-6 print:hidden">
+                 <div>
+                    <h2 className="text-2xl font-bold text-white mb-4">Generated Documents</h2>
+                    <div className="flex items-center gap-4">
+                        <div className="flex gap-2 items-center">
+                            <span className="text-gray-400 self-center text-sm">View:</span>
+                            <Button variant={view === 'quote' ? 'primary' : 'secondary'} onClick={() => setView('quote')} size="sm">Quote</Button>
+                            <Button variant={view === 'bom' ? 'primary' : 'secondary'} onClick={() => setView('bom')} size="sm">BOM</Button>
+                        </div>
+                        <div className="border-l border-gray-600 h-6"></div>
+                        <div className="flex gap-2 items-center">
+                            <span className="text-gray-400 self-center text-sm">Template:</span>
+                            <Button variant={props.quoteTemplate === 'detailed' ? 'primary' : 'secondary'} onClick={() => props.setQuoteTemplate('detailed')} size="sm" disabled={view !== 'quote'}>Detailed</Button>
+                            <Button variant={props.quoteTemplate === 'summary' ? 'primary' : 'secondary'} onClick={() => props.setQuoteTemplate('summary')} size="sm" disabled={view !== 'quote'}>Summary</Button>
+                        </div>
+                    </div>
                 </div>
+                <Button onClick={handlePrint}>Print</Button>
             </div>
             <div className="bg-gray-700 p-2 rounded-lg">
                 {view === 'quote' ? <Quote/> : <BillOfMaterials />}

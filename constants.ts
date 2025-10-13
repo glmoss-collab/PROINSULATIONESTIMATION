@@ -1,16 +1,21 @@
 // All prices are in USD, lengths in LF, areas in SF
-// Based on "October 2025 - Athens, GA Market"
+// Based on "General Insulation Price Book - August 2024"
 
 // DUCTWORK INSULATION (per LF, includes FSK facing)
+// Derived from Manson FSK Duct Wrap ($0.42/sf) assuming avg 24x12 duct (6' perimeter)
+// 6 SF/LF * $0.42/SF = $2.52/LF
 export const DUCT_PRICING = {
-  '1.5_fiberglass_fsk': 5.00, // Average of $4.75-5.25
-  '2.0_fiberglass_fsk': 6.13, // Average of $5.75-6.50
+  '1.5_fiberglass_fsk': 2.52, 
 };
 
 // PIPING INSULATION (per LF)
+// Averaged from K-Flex Insul-Lock 1" wall for 2", 3", 4" pipe
+// ($4.409 + $7.303 + $9.832) / 3 = $7.18
+// Averaged from Alley-Kat ASJ 1.5" wall for 1", 2", 4", 6" pipe
+// ($2.603 + $3.266 + $4.148 + $4.927) / 4 = $3.74
 export const PIPE_PRICING = {
-  '1.0_elastomeric': 4.50, // Average of $4.25-4.75
-  '1.5_fiberglass': 4.88, // Average of $4.50-5.25
+  '1.0_elastomeric': 7.18, 
+  '1.5_fiberglass': 3.74, 
 };
 
 // JACKETING (per SF)
@@ -52,5 +57,3 @@ export const ACCESSORY_COVERAGE = {
   bands_per_lf_outdoor: 1, // 1 per 12"
   fsk_tape_roll_per_lf: 200, // 1 roll per 200 LF
 };
-
-export const DUCT_BOARD_SHEET_LF_COVERAGE = 40;

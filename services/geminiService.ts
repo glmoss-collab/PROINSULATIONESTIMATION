@@ -54,8 +54,9 @@ const specAnalysisSchema = {
         },
     },
     summary: {
-      type: Type.STRING,
-      description: "A brief summary of all key insulation requirements.",
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: "A detailed executive list of system requirements, installation methods, and all materials needed by the insulation subcontractor that may affect pricing.",
     },
   },
   required: ["ductwork", "piping", "outdoor", "summary"],
@@ -95,12 +96,18 @@ const drawingAnalysisSchema = {
 };
 
 export const analyzeSpecification = async (file: File): Promise<GeminiSpecAnalysis> => {
-  const systemInstruction = "You are an AI-powered HVAC mechanical insulation estimation service for Guaranteed Insulation. Respond ONLY with the JSON object as defined by the schema.";
+  const systemInstruction = "You are an AI-powered HVAC mechanical insulation estimation service for Guaranteed Insulation. Your role is to act as a senior estimator reviewing a new project specification. Respond ONLY with the JSON object as defined by the schema.";
   
   const userPrompt = `Analyze this specification PDF (Division 23).
-    First, extract project information from the cover page: Project Name, Location, Customer/Contractor, and issue Date.
-    Second, extract key insulation requirements. Focus on material types, thickness, and facing/jacketing for each system (ductwork, piping).
-    Note any special requirements like mastic, vapor barriers, or outdoor weatherproofing. Provide a concise summary of the insulation specs.`;
+
+1.  **Project Information:** Extract Project Name, Location, Customer/Contractor, and issue Date from the cover page.
+2.  **Insulation Requirements:** Extract the core requirements for Ductwork, Piping, and Outdoor systems, focusing on material, thickness, and facing/jacketing.
+3.  **Executive Summary (Detailed List):** This is the most critical part. Create a detailed bullet-point list for the 'summary' field. This list must be comprehensive for an insulation subcontractor. For each system (e.g., Supply Air Duct, CHW Pipe), include:
+    *   **Primary Insulation:** Material and thickness (e.g., "1.5\\" Fiberglass Duct Wrap").
+    *   **Facing/Jacketing:** (e.g., "FSK Facing", "ASJ Jacketing", "0.016 Aluminum Jacketing on exterior runs").
+    *   **Installation Method:** Key methods specified (e.g., "Full adhesive coverage", "All joints sealed with matching tape", "Vapor barrier mastic on all seams and punctures").
+    *   **Required Accessories:** Explicitly list all required accessory materials that will impact the price, such as: FSK/ASJ tape, adhesives, mastics, vapor barriers, insulation saddles/shields at hangers, stainless steel bands, PVC fitting covers, etc.
+    *   **Scope Notes:** Mention any other important details like requirements for fire-rated areas, specific sealant products, or pressure testing.`;
 
   const parts = [
     { text: userPrompt },
