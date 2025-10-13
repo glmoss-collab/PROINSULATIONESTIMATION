@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -19,7 +20,8 @@ import {
   ACCESSORY_PRICING,
   LABOR_RATES,
   TAKEOFF_FACTORS,
-  ACCESSORY_COVERAGE
+  ACCESSORY_COVERAGE,
+  DUCT_BOARD_SHEET_LF_COVERAGE
 } from './constants';
 
 
@@ -365,6 +367,18 @@ const TakeoffEntryStep: React.FC<{
 };
 
 
+const getDuctSurfaceArea = (size: string, length: number): number => {
+    try {
+        const [width, height] = size.toLowerCase().split('x').map(Number);
+        if (!isNaN(width) && !isNaN(height)) {
+            return ((width + height) * 2 / 12) * length;
+        }
+    } catch (e) {
+        // Ignore parsing errors for non-standard sizes
+    }
+    return 0; // Return 0 if size format is wrong
+};
+
 const useQuoteCalculator = (ductwork: TakeoffItem[], piping: TakeoffItem[], pricing: PricingSettings) => {
     return useMemo(() => {
         const lineItems: CalculatedLineItem[] = [];
@@ -374,39 +388,98 @@ const useQuoteCalculator = (ductwork: TakeoffItem[], piping: TakeoffItem[], pric
 
         // --- Ductwork Calculation ---
         let totalDuctLf = 0;
+        let totalDuctSurfaceArea = 0;
         ductwork.forEach(d => {
-            const materialCost = d.length * DUCT_PRICING['1.5_fiberglass_fsk']; // Assuming 1.5" FSK for simplicity
+            const lengthWithWaste = d.length * TAKEOFF_FACTORS.duct_straight_waste;
+            const materialCost = lengthWithWaste * DUCT_PRICING['1.5_fiberglass_fsk']; // Assuming 1.5" FSK
             totalMaterialCost += materialCost;
-            lineItems.push({ description: `Ductwork Insulation - 1.5" FSK`, details: d.size, quantity: d.length, unit: 'LF', unitPrice: DUCT_PRICING['1.5_fiberglass_fsk'], total: materialCost, type: 'material' });
+            lineItems.push({ 
+                category: 'DUCTWORK INSULATION',
+                description: `Supply/Return Ductwork - 1.5" Fiberglass FSK`, 
+                details: `${d.size} (includes fittings)`, 
+                quantity: lengthWithWaste, 
+                unit: 'LF', 
+                unitPrice: DUCT_PRICING['1.5_fiberglass_fsk'], 
+                total: materialCost, 
+                type: 'material' 
+            });
             
-            const laborHours = (d.length / LABOR_RATES.duct_rectangular_medium) + (d.fittings * LABOR_RATES.duct_fitting);
+            const laborHours = (lengthWithWaste / LABOR_RATES.duct_rectangular_medium) + (d.fittings * LABOR_RATES.duct_fitting);
             totalLaborHours += laborHours;
-            totalDuctLf += d.length;
+            totalDuctLf += lengthWithWaste;
+            totalDuctSurfaceArea += getDuctSurfaceArea(d.size, lengthWithWaste);
         });
-        bom.push({ category: 'Duct Insulation', item: '1.5" Fiberglass Duct Board w/ FSK', quantity: `${Math.ceil(totalDuctLf * 1.1 / 40)} sheets` });
-
+        
+        if (totalDuctLf > 0) {
+            bom.push({ 
+                category: 'DUCT INSULATION', 
+                item: `1.5" Fiberglass Duct Board w/ FSK, 4' x 10' sheets`, 
+                quantity: `${Math.ceil(totalDuctLf / DUCT_BOARD_SHEET_LF_COVERAGE)} sheets (approx ${Math.round(totalDuctLf)} LF coverage)` 
+            });
+        }
+        
         // --- Piping Calculation ---
-        let totalPipeLf = 0;
+        const pipeBomItems: Record<string, { material: string, totalLength: number, sizes: Record<string, number> }> = {};
         piping.forEach(p => {
-            const adjustedLength = p.length + (p.fittings * TAKEOFF_FACTORS.pipe_elbow_equivalent_lf); // Simplified fittings calc
-            const materialCost = adjustedLength * PIPE_PRICING['1.0_elastomeric']; // Assuming 1" Elastomeric
+            const adjustedLength = p.length + (p.fittings * TAKEOFF_FACTORS.pipe_elbow_equivalent_lf);
+            const materialCost = adjustedLength * PIPE_PRICING['1.0_elastomeric'];
             totalMaterialCost += materialCost;
-            lineItems.push({ description: `Piping Insulation - 1" Elastomeric`, details: p.size, quantity: adjustedLength, unit: 'LF', unitPrice: PIPE_PRICING['1.0_elastomeric'], total: materialCost, type: 'material' });
+            lineItems.push({ 
+                category: 'PIPING INSULATION',
+                description: `Chilled Water - 1" Elastomeric`, 
+                details: `${p.size} pipe (includes fittings)`, 
+                quantity: adjustedLength, 
+                unit: 'LF', 
+                unitPrice: PIPE_PRICING['1.0_elastomeric'], 
+                total: materialCost, 
+                type: 'material' 
+            });
 
             const laborHours = (adjustedLength / LABOR_RATES.pipe_medium) + (p.fittings * LABOR_RATES.pipe_fitting);
             totalLaborHours += laborHours;
-            totalPipeLf += adjustedLength;
+            
+            const pipeMaterial = '1" Elastomeric Pipe Insulation, 1/2" wall';
+            if (!pipeBomItems[pipeMaterial]) {
+                pipeBomItems[pipeMaterial] = { material: pipeMaterial, totalLength: 0, sizes: {} };
+            }
+            pipeBomItems[pipeMaterial].totalLength += adjustedLength;
+            pipeBomItems[pipeMaterial].sizes[p.size] = (pipeBomItems[pipeMaterial].sizes[p.size] || 0) + adjustedLength;
         });
-        bom.push({ category: 'Pipe Insulation', item: '1" Elastomeric Pipe Insulation', quantity: `${Math.ceil(totalPipeLf * 1.05)} LF`});
+
+        Object.values(pipeBomItems).forEach(group => {
+            const sizeDetails = Object.entries(group.sizes)
+                .map(([size, length]) => `  ${size} pipe size: ${Math.ceil(length)} LF`)
+                .join('\n');
+            bom.push({
+                category: 'PIPE INSULATION',
+                item: `${group.material}\n${sizeDetails}`,
+                quantity: ``
+            });
+        });
 
         // --- Accessories ---
+        const accessoryLineItems: CalculatedLineItem[] = [];
+        const accessoryBom: BillOfMaterialsItem[] = [];
         const adhesiveGallons = Math.ceil(totalDuctLf / ACCESSORY_COVERAGE.adhesive_gallon_per_lf);
         if(adhesiveGallons > 0) {
             const adhesiveCost = adhesiveGallons * ACCESSORY_PRICING.adhesive_gallon;
             totalMaterialCost += adhesiveCost;
-            lineItems.push({ description: 'Adhesive', details: '', quantity: adhesiveGallons, unit: 'GAL', unitPrice: ACCESSORY_PRICING.adhesive_gallon, total: adhesiveCost, type: 'material' });
-            bom.push({ category: 'Accessories', item: 'Duct Insulation Adhesive', quantity: `${adhesiveGallons} gallons` });
+            accessoryLineItems.push({ category: 'ACCESSORIES & MATERIALS', description: 'Adhesive', details: '', quantity: adhesiveGallons, unit: 'GAL', unitPrice: ACCESSORY_PRICING.adhesive_gallon, total: adhesiveCost, type: 'material' });
+            accessoryBom.push({ category: 'ACCESSORIES', item: 'Duct Insulation Adhesive', quantity: `${adhesiveGallons} gallons` });
         }
+        const masticGallons = Math.ceil(totalDuctSurfaceArea / ACCESSORY_COVERAGE.mastic_gallon_per_sf);
+        if(masticGallons > 0) {
+            const masticCost = masticGallons * ACCESSORY_PRICING.mastic_gallon;
+            totalMaterialCost += masticCost;
+            accessoryLineItems.push({ category: 'ACCESSORIES & MATERIALS', description: 'Mastic Vapor Seal', details: '', quantity: masticGallons, unit: 'GAL', unitPrice: ACCESSORY_PRICING.mastic_gallon, total: masticCost, type: 'material' });
+            accessoryBom.push({ category: 'ACCESSORIES', item: 'Mastic Vapor Seal', quantity: `${masticGallons} gallons` });
+        }
+        const tapeRolls = Math.ceil(totalDuctLf / ACCESSORY_COVERAGE.fsk_tape_roll_per_lf);
+        if (tapeRolls > 0) {
+            accessoryBom.push({ category: 'ACCESSORIES', item: 'FSK Tape, 3" wide', quantity: `${tapeRolls} rolls` });
+        }
+        lineItems.push(...accessoryLineItems);
+        bom.push(...accessoryBom);
         
         // --- Totals ---
         const baseMaterialCost = totalMaterialCost;
@@ -501,7 +574,7 @@ const GeneratedQuoteStep: React.FC<{
   pricing: PricingSettings;
   specAnalysis: GeminiSpecAnalysis | null;
 }> = (props) => {
-    const { lineItems, bom, grandTotal, materialWithMarkup, laborWithMarkup } = useQuoteCalculator(props.ductwork, props.piping, props.pricing);
+    const { lineItems, bom, grandTotal, materialWithMarkup, laborWithMarkup, subtotal, overheadAndProfitAmount, contingencyAmount } = useQuoteCalculator(props.ductwork, props.piping, props.pricing);
     
     const [view, setView] = useState<'quote' | 'bom'>('quote');
     
@@ -509,100 +582,164 @@ const GeneratedQuoteStep: React.FC<{
         window.print();
     };
 
-    const Quote = () => (
-        <div className="bg-white text-black p-8 font-sans printable-area">
-             {/* Header */}
-            <div className="text-center mb-8">
-                <h1 className="text-3xl font-bold">GUARANTEED INSULATION</h1>
-                <p>Athens, GA | glmoss@guaranteedinsulation.com</p>
-                <h2 className="text-2xl font-semibold mt-4 border-b-2 border-black pb-2">MECHANICAL INSULATION PROPOSAL</h2>
-            </div>
+    const Quote = () => {
+        // FIX: Explicitly type the accumulator in the `reduce` function to avoid potential type inference issues.
+        const groupedLineItems = lineItems.reduce((acc: Record<string, CalculatedLineItem[]>, item) => {
+            const category = item.category || 'Miscellaneous';
+            if (!acc[category]) {
+                acc[category] = [];
+            }
+            acc[category].push(item);
+            return acc;
+        }, {});
 
-            {/* Project Info Table */}
-            <div className="grid grid-cols-2 gap-x-8 text-sm mb-8">
-                <div>
-                    <p><strong>Project:</strong> {props.projectInfo.projectName}</p>
-                    <p><strong>Location:</strong> {props.projectInfo.location}</p>
+        return (
+            <div className="bg-white text-black p-8 font-sans printable-area">
+                 {/* Header */}
+                <div className="flex justify-between items-start mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold">GUARANTEED INSULATION</h1>
+                        <p className="text-sm">123 Insulation Way, Athens, GA 30601</p>
+                    </div>
+                    <div className="text-right text-sm">
+                        <p><strong>Contact:</strong> Glen Moss</p>
+                        <p><strong>Phone:</strong> (706) 123-4567</p>
+                        <p><strong>Email:</strong> glmoss@guaranteedinsulation.com</p>
+                    </div>
                 </div>
-                <div>
-                    <p><strong>Customer:</strong> {props.projectInfo.customer}</p>
-                    <p><strong>Date:</strong> {props.projectInfo.date}</p>
-                    <p><strong>Quote #:</strong> {props.projectInfo.quoteNumber}</p>
-                </div>
-            </div>
+                <h2 className="text-2xl font-semibold mt-4 text-center border-b-2 border-black pb-2 mb-6">MECHANICAL INSULATION PROPOSAL</h2>
 
-            {/* Scope of Work */}
-            <div className="mb-8">
-                <h3 className="font-bold text-lg border-b border-gray-400 mb-2">SCOPE OF WORK</h3>
-                <p className="text-sm">Furnish and install mechanical insulation per project specifications. All work to be performed in a neat and workmanlike manner.</p>
-                {props.specAnalysis && <p className="text-sm mt-2">Systems include: {props.specAnalysis.summary}</p>}
-            </div>
-
-            {/* Pricing Table */}
-             <table className="w-full text-sm mb-8">
-                <thead className="bg-gray-200">
-                    <tr>
-                        <th className="text-left p-2">ITEM DESCRIPTION</th>
-                        <th className="text-right p-2">QTY</th>
-                        <th className="text-right p-2">UNIT</th>
-                        <th className="text-right p-2">UNIT PRICE</th>
-                        <th className="text-right p-2">TOTAL</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {lineItems.map((item, index) => (
-                        <tr key={index} className="border-b">
-                            <td className="p-2">{item.description} <span className="text-gray-600">{item.details}</span></td>
-                            <td className="text-right p-2">{item.quantity.toFixed(2)}</td>
-                            <td className="text-right p-2">{item.unit}</td>
-                            <td className="text-right p-2">{item.unitPrice.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</td>
-                            <td className="text-right p-2">{item.total.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</td>
+                {/* Project Info Table */}
+                <table className="w-full text-sm mb-8">
+                    <tbody>
+                        <tr>
+                            <td className="font-bold pr-4 py-1">Project:</td>
+                            <td className="py-1">{props.projectInfo.projectName}</td>
+                            <td className="font-bold pr-4 py-1 text-right">Date:</td>
+                            <td className="py-1 w-1/4">{props.projectInfo.date}</td>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
-            
-            {/* Summary Totals */}
-            <div className="flex justify-end">
-                <div className="w-1/2 text-sm">
-                    <div className="flex justify-between p-2"><span className="font-semibold">MATERIAL SUBTOTAL:</span> <span>{materialWithMarkup.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span></div>
-                    <div className="flex justify-between p-2"><span className="font-semibold">LABOR SUBTOTAL:</span> <span>{laborWithMarkup.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span></div>
-                    <div className="flex justify-between bg-gray-200 p-2 text-lg font-bold"><span >TOTAL:</span> <span >{grandTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span></div>
+                        <tr>
+                            <td className="font-bold pr-4 py-1">Location:</td>
+                            <td className="py-1">{props.projectInfo.location}</td>
+                            <td className="font-bold pr-4 py-1 text-right">Quote #:</td>
+                            <td className="py-1">{props.projectInfo.quoteNumber}</td>
+                        </tr>
+                         <tr>
+                            <td className="font-bold pr-4 py-1">Customer:</td>
+                            <td className="py-1">{props.projectInfo.customer}</td>
+                            <td className="font-bold pr-4 py-1 text-right">Valid:</td>
+                            <td className="py-1">30 Days</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                {/* Scope of Work */}
+                <div className="mb-8">
+                    <h3 className="font-bold text-lg border-b border-gray-400 mb-2">SCOPE OF WORK</h3>
+                    <p className="text-sm">Guaranteed Insulation shall furnish and install mechanical insulation per project specifications. All work to be performed in a neat and workmanlike manner, conforming to industry standards such as ASTM and SMACNA.</p>
+                    {props.specAnalysis && (
+                        <ul className="text-sm list-disc list-inside mt-2 space-y-1">
+                            <li><strong>Systems Covered:</strong> Supply Ductwork, Return Ductwork, and Piping Systems.</li>
+                            <li><strong>Ductwork Insulation:</strong> {props.specAnalysis.ductwork.thickness} {props.specAnalysis.ductwork.material} with {props.specAnalysis.ductwork.facing} facing.</li>
+                            <li><strong>Piping Insulation:</strong> {props.specAnalysis.piping.thickness} {props.specAnalysis.piping.material} with {props.specAnalysis.piping.jacketing} jacketing.</li>
+                            <li><strong>Outdoor/Exposed Systems:</strong> Shall have {props.specAnalysis.outdoor.jacketing} with {props.specAnalysis.outdoor.requirements}.</li>
+                            <li><strong>Locations:</strong> Includes mechanical rooms, ceiling spaces, and rooftop/exterior locations as shown on drawings.</li>
+                        </ul>
+                    )}
+                </div>
+
+                {/* Pricing Table */}
+                <table className="w-full text-sm mb-4">
+                    <thead className="bg-gray-200">
+                        <tr>
+                            <th className="text-left p-2 font-bold">ITEM DESCRIPTION</th>
+                            <th className="text-right p-2 font-bold">QTY</th>
+                            <th className="text-right p-2 font-bold">UNIT</th>
+                            <th className="text-right p-2 font-bold">UNIT PRICE</th>
+                            <th className="text-right p-2 font-bold">TOTAL</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {Object.entries(groupedLineItems).map(([category, items]) => (
+                            <React.Fragment key={category}>
+                                <tr>
+                                    <td colSpan={5} className="p-2 font-bold bg-gray-100">{category}</td>
+                                </tr>
+                                {items.map((item, index) => (
+                                    <tr key={index} className="border-b border-gray-200">
+                                        <td className="p-2">{item.description} <span className="text-gray-600">{item.details}</span></td>
+                                        <td className="text-right p-2">{item.quantity.toFixed(1)}</td>
+                                        <td className="text-right p-2">{item.unit}</td>
+                                        <td className="text-right p-2">{item.unitPrice.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</td>
+                                        <td className="text-right p-2">{item.total.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</td>
+                                    </tr>
+                                ))}
+                            </React.Fragment>
+                        ))}
+                    </tbody>
+                </table>
+                
+                {/* Summary Totals */}
+                <div className="flex justify-end mt-4">
+                    <div className="w-full max-w-sm text-sm">
+                        <div className="flex justify-between p-2"><span className="font-semibold">MATERIAL TOTAL:</span> <span>{materialWithMarkup.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span></div>
+                        <div className="flex justify-between p-2"><span className="font-semibold">LABOR TOTAL:</span> <span>{laborWithMarkup.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span></div>
+                        <div className="flex justify-between p-2 border-t border-gray-400"><span className="font-semibold">SUBTOTAL:</span> <span>{subtotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span></div>
+                        <div className="flex justify-between p-2"><span className="">Overhead & Profit:</span> <span>{overheadAndProfitAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span></div>
+                        <div className="flex justify-between p-2"><span className="">Contingency:</span> <span>{contingencyAmount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span></div>
+                        <div className="flex justify-between bg-gray-200 p-2 text-lg font-bold"><span >TOTAL QUOTE:</span> <span >{grandTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</span></div>
+                    </div>
+                </div>
+                
+                {/* Fine Print */}
+                <div className="text-xs text-gray-600 mt-8 space-y-2">
+                    <div>
+                        <h4 className="font-bold uppercase">Inclusions:</h4>
+                        <p>All materials and labor for installation as listed above; Normal cleanup and debris removal; Standard 1-year workmanship warranty.</p>
+                    </div>
+                     <div>
+                        <h4 className="font-bold uppercase">Exclusions:</h4>
+                        <p>Scaffolding, staging, lifts, or access equipment; Insulation removal or demolition; Permits and inspections; Work outside normal business hours (unless specified); Final cleaning beyond normal construction cleanup; Sales tax (if applicable).</p>
+                    </div>
+                     <div>
+                        <h4 className="font-bold uppercase">Qualifications:</h4>
+                        <p>Pricing is based on project specifications dated {props.projectInfo.date}. Assumes clear and ready access to all work areas during normal business hours.</p>
+                    </div>
+                    <div>
+                        <h4 className="font-bold uppercase">Terms & Conditions:</h4>
+                        <p>Quote valid for 30 days from date. Payment terms: Net 30 days. Required schedule notice: 2 weeks. Contractor carries required liability and workers comp insurance.</p>
+                    </div>
                 </div>
             </div>
-            
-             {/* Fine Print */}
-            <div className="text-xs text-gray-600 mt-8 space-y-4">
-                <div>
-                    <h4 className="font-bold">EXCLUSIONS:</h4>
-                    <p>Scaffolding, staging, lifts, or access equipment; Insulation removal or demolition; Permits and inspections; Work outside normal business hours; Sales tax.</p>
-                </div>
-                <div>
-                    <h4 className="font-bold">TERMS & CONDITIONS:</h4>
-                    <p>Quote valid for 30 days. Payment terms: Net 30 days. Required schedule notice: 2 weeks.</p>
-                </div>
-            </div>
-        </div>
-    );
+        );
+    }
     
     const BillOfMaterials = () => (
       <div className="bg-white text-black p-8 font-sans printable-area">
-        <h1 className="text-2xl font-bold mb-2">GUARANTEED INSULATION - MATERIAL ORDER</h1>
+        <h1 className="text-2xl font-bold mb-2">GUARANTEED INSULATION - MATERIAL ORDER LIST</h1>
         <p><strong>Project:</strong> {props.projectInfo.projectName}</p>
-        <p><strong>Quote #:</strong> {props.projectInfo.quoteNumber}</p>
+        <p><strong>Quote:</strong> {props.projectInfo.quoteNumber}</p>
         <p><strong>Date:</strong> {props.projectInfo.date}</p>
         
         <div className="mt-8 space-y-6">
           {Array.from(new Set(bom.map(item => item.category))).map(category => (
             <div key={category}>
-              <h3 className="font-bold text-lg border-b border-gray-400 mb-2 uppercase">{category}</h3>
-              <ul className="list-disc list-inside">
+              <h3 className="font-bold text-lg border-b border-gray-400 mb-2">{category}:</h3>
+              <ul className="list-none space-y-2">
                 {bom.filter(item => item.category === category).map((item, index) => (
-                  <li key={index}><strong>{item.quantity}</strong> - {item.item}</li>
+                  <li key={index} className="whitespace-pre-line">
+                    - {item.quantity && <>{' '}<span className="font-bold">{item.quantity}</span> -</>}{' '}
+                    {item.item}
+                  </li>
                 ))}
               </ul>
             </div>
           ))}
+        </div>
+
+        <div className="mt-12 pt-4 border-t border-black">
+            <p><strong>DELIVERY:</strong> [Date Needed]</p>
+            <p><strong>SHIP TO:</strong> {props.projectInfo.location}</p>
         </div>
       </div>
     );

@@ -1,4 +1,3 @@
-
 // All prices are in USD, lengths in LF, areas in SF
 // Based on "October 2025 - Athens, GA Market"
 
@@ -24,6 +23,7 @@ export const ACCESSORY_PRICING = {
   mastic_gallon: 50.00,
   adhesive_gallon: 40.00,
   stainless_bands_each: 2.50,
+  fsk_tape_roll: 15.00,
 };
 
 // LABOR PRODUCTION RATES
@@ -50,4 +50,7 @@ export const ACCESSORY_COVERAGE = {
   adhesive_gallon_per_lf: 125, // 1 gallon per 100-150 LF
   mastic_gallon_per_sf: 175, // 1 gallon per 150-200 SF
   bands_per_lf_outdoor: 1, // 1 per 12"
+  fsk_tape_roll_per_lf: 200, // 1 roll per 200 LF
 };
+
+export const DUCT_BOARD_SHEET_LF_COVERAGE = 40;

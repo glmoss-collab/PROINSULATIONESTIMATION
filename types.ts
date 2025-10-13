@@ -1,4 +1,3 @@
-
 export enum Step {
   Documents,
   ProjectInfo,
@@ -47,6 +46,7 @@ export interface CalculatedLineItem {
   unitPrice: number;
   total: number;
   type: 'material' | 'labor' | 'summary';
+  category: string;
 }
 
 export interface BillOfMaterialsItem {
