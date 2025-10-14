@@ -57,3 +57,24 @@ export const ACCESSORY_COVERAGE = {
   bands_per_lf_outdoor: 1, // 1 per 12"
   fsk_tape_roll_per_lf: 200, // 1 roll per 200 LF
 };
+
+
+// STANDARDS FOR COMPARISON
+export const TYPICAL_PROJECT_STANDARDS = {
+  ductwork: {
+    material: "Fiberglass",
+    thickness: 1.5, // in inches
+    facing: "FSK",
+  },
+  piping: {
+    material: "Elastomeric",
+    thickness: 1.0, // in inches
+    jacket: "None", // for interior
+  },
+  commonClarifications: [
+    "Are there any requirements for acoustic insulation not mentioned in the main spec?",
+    "Confirm vapor barrier requirements and locations (e.g., all fittings, seams).",
+    "What are the specific requirements for outdoor insulation and jacketing (material, thickness, sealant)?",
+    "Please clarify the scope of work regarding equipment insulation (tanks, pumps, AHUs, etc.)."
+  ]
+};

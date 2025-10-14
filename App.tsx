@@ -1,5 +1,7 @@
 
-import React, { useState, useCallback, useMemo } from 'react';
+
+
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import {
   Step,
@@ -9,7 +11,9 @@ import {
   CalculatedLineItem,
   BillOfMaterialsItem,
   GeminiSpecAnalysis,
-  GeminiDrawingAnalysis
+  GeminiDrawingAnalysis,
+  DuctworkSpecItem,
+  PipingSpecItem
 } from './types';
 import { analyzeSpecification, analyzeDrawings } from './services/geminiService';
 import {
@@ -19,7 +23,8 @@ import {
   ACCESSORY_PRICING,
   LABOR_RATES,
   TAKEOFF_FACTORS,
-  ACCESSORY_COVERAGE
+  ACCESSORY_COVERAGE,
+  TYPICAL_PROJECT_STANDARDS
 } from './constants';
 
 
@@ -31,6 +36,7 @@ const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ chi
   </div>
 );
 
+// FIX: Changed HTMLButtonButtonElement to HTMLButtonElement to fix typo.
 const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary', size?: 'normal' | 'sm' }> = ({ children, className = '', variant = 'primary', size = 'normal', ...props }) => {
   const baseClasses = 'font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed rounded-md';
   const variantClasses = {
@@ -102,7 +108,7 @@ export default function App() {
     laborRate: 70,
   });
   
-  const [quoteTemplate, setQuoteTemplate] = useState<'detailed' | 'summary'>('detailed');
+  const [quoteTemplate, setQuoteTemplate] = useState<'detailed' | 'summary' | 'budget'>('detailed');
 
 
   const nextStep = () => setCurrentStep(s => Math.min(s + 1, Object.keys(Step).length / 2 - 1));
@@ -184,6 +190,7 @@ export default function App() {
             setPricing={setPricing}
             ductwork={ductworkTakeoff}
             piping={pipingTakeoff}
+            specAnalysis={specAnalysis}
             />;
       case Step.Quote:
         return <GeneratedQuoteStep
@@ -262,6 +269,49 @@ const ProjectInfoStep: React.FC<{ projectInfo: ProjectInfo, setProjectInfo: Reac
   );
 };
 
+const AnalysisSection: React.FC<{ title: string; items: string[] | undefined; itemClass?: string; symbol?: string }> = ({ title, items, itemClass = 'text-gray-300', symbol = '•' }) => {
+    if (!items || items.length === 0) return null;
+    return (
+        <div className="mt-4">
+            <h5 className="font-semibold text-blue-300">{title}</h5>
+            <ul className="list-none text-sm space-y-1 mt-1 pl-2">
+                {items.map((item, index) => <li key={index} className={`flex ${itemClass}`}><span className="mr-2 flex-shrink-0">{symbol}</span><span>{item}</span></li>)}
+            </ul>
+        </div>
+    );
+};
+
+const ComparisonModal: React.FC<{
+    results: { unusual: string[], questions: string[] };
+    onClose: () => void;
+}> = ({ results, onClose }) => {
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <Card className="max-w-2xl w-full">
+                <h2 className="text-2xl font-bold text-white mb-4">Comparison to Standards</h2>
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+                    <AnalysisSection 
+                        title="🚩 Unusual Requirements Flagged" 
+                        items={results.unusual.length > 0 ? results.unusual : ["None. All specified materials and thicknesses align with typical standards."]} 
+                        itemClass={results.unusual.length > 0 ? "text-yellow-300" : "text-green-300"}
+                        symbol="🚩"
+                    />
+                    <AnalysisSection 
+                        title="🤔 Suggested Clarification Questions" 
+                        items={results.questions}
+                        itemClass="text-purple-300"
+                        symbol="🤔"
+                    />
+                </div>
+                <div className="text-right mt-6">
+                    <Button onClick={onClose}>Close</Button>
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+
 const DocumentUploadStep: React.FC<{
   onSpecUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onDrawingUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -270,31 +320,139 @@ const DocumentUploadStep: React.FC<{
   isSpecLoading: boolean;
   isDrawingLoading: boolean;
 }> = ({ onSpecUpload, onDrawingUpload, specAnalysis, drawingAnalysis, isSpecLoading, isDrawingLoading }) => {
+  const specFileInputRef = useRef<HTMLInputElement>(null);
+  const drawingFileInputRef = useRef<HTMLInputElement>(null);
+  const [showComparison, setShowComparison] = useState(false);
+  const [comparisonResults, setComparisonResults] = useState<{unusual: string[], questions: string[]}>({unusual: [], questions: []});
+
+  const compareSpecsToStandards = (analysis: GeminiSpecAnalysis) => {
+    const unusual: string[] = [];
+    const questions = [...TYPICAL_PROJECT_STANDARDS.commonClarifications];
+
+    analysis.ductworkSystems.forEach(system => {
+      const material = system.material?.toLowerCase();
+      const standardMaterial = TYPICAL_PROJECT_STANDARDS.ductwork.material.toLowerCase();
+      if (material && !material.includes(standardMaterial)) {
+        unusual.push(`Duct System '${system.systemType}' specifies '${system.material}', which is non-standard (typical: ${TYPICAL_PROJECT_STANDARDS.ductwork.material}).`);
+      }
+      const thickness = parseFloat(system.thickness);
+      if (!isNaN(thickness) && thickness !== TYPICAL_PROJECT_STANDARDS.ductwork.thickness) {
+         unusual.push(`Duct System '${system.systemType}' specifies ${thickness}" thickness, which is non-standard (typical: ${TYPICAL_PROJECT_STANDARDS.ductwork.thickness}").`);
+      }
+    });
+
+     analysis.pipingSystems.forEach(system => {
+      const material = system.material?.toLowerCase();
+      const standardMaterial = TYPICAL_PROJECT_STANDARDS.piping.material.toLowerCase();
+      if (material && !material.includes(standardMaterial)) {
+        unusual.push(`Pipe System '${system.systemType}' specifies '${system.material}', which is non-standard (typical: ${TYPICAL_PROJECT_STANDARDS.piping.material}).`);
+      }
+       const thickness = parseFloat(system.thickness);
+      if (!isNaN(thickness) && thickness !== TYPICAL_PROJECT_STANDARDS.piping.thickness) {
+         unusual.push(`Pipe System '${system.systemType}' specifies ${thickness}" thickness, which is non-standard (typical: ${TYPICAL_PROJECT_STANDARDS.piping.thickness}").`);
+      }
+    });
+    
+    setComparisonResults({ unusual, questions });
+    setShowComparison(true);
+  };
+
   return (
+    <>
+    {showComparison && <ComparisonModal results={comparisonResults} onClose={() => setShowComparison(false)} />}
     <Card>
       <h2 className="text-2xl font-bold text-white mb-6">Upload & Analyze Documents</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Specifications Column */}
         <div>
           <h3 className="text-lg font-semibold text-blue-300 mb-3">Specifications (PDF)</h3>
-          <Input label="Upload Spec File" id="specFile" type="file" accept=".pdf" onChange={onSpecUpload} disabled={isSpecLoading} />
-          {isSpecLoading && <div className="flex items-center mt-4 text-blue-300"><Spinner />Analyzing Specs...</div>}
+          <div className="flex gap-2">
+            <Button onClick={() => specFileInputRef.current?.click()} disabled={isSpecLoading} className="flex-grow">
+              {isSpecLoading ? <><Spinner/> Analyzing...</> : "Extract Specs"}
+            </Button>
+            <input ref={specFileInputRef} type="file" accept=".pdf" onChange={onSpecUpload} disabled={isSpecLoading} className="hidden" />
+            <Button variant="secondary" onClick={() => compareSpecsToStandards(specAnalysis!)} disabled={!specAnalysis}>Compare to Standards</Button>
+          </div>
+
           {specAnalysis && (
-            <div className="mt-4 p-4 bg-gray-900/50 rounded-lg border border-gray-700">
-              <h4 className="font-bold text-white">Analysis Summary:</h4>
-              <p className="text-sm text-gray-300 mt-2"><strong>Duct:</strong> {specAnalysis.ductwork.thickness} {specAnalysis.ductwork.material} w/ {specAnalysis.ductwork.facing}</p>
-              <p className="text-sm text-gray-300"><strong>Pipe:</strong> {specAnalysis.piping.thickness} {specAnalysis.piping.material} w/ {specAnalysis.piping.jacketing}</p>
-              <ul className="list-disc list-inside text-sm text-gray-300 mt-2 space-y-1">
-                {specAnalysis.summary.map((item, index) => <li key={index}>{item}</li>)}
-              </ul>
+            <div className="mt-4 p-4 bg-gray-900/50 rounded-lg border border-gray-700 max-h-[40rem] overflow-y-auto">
+              <h4 className="font-bold text-white">Analysis Results:</h4>
+              
+              {/* Ductwork Table */}
+              <h5 className="font-semibold text-blue-300 mt-4">Ductwork Systems</h5>
+              {specAnalysis.ductworkSystems?.length > 0 ? (
+                <div className="overflow-x-auto mt-2">
+                  <table className="w-full text-xs whitespace-nowrap">
+                    <thead className="bg-gray-800">
+                      <tr>
+                        <th className="p-2 text-left">System Type</th>
+                        <th className="p-2 text-left">Thickness</th>
+                        <th className="p-2 text-left">Material</th>
+                        <th className="p-2 text-left">Facing</th>
+                        <th className="p-2 text-left">Location</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {specAnalysis.ductworkSystems.map((s, i) => (
+                        <tr key={i} className="border-b border-gray-700">
+                          <td className="p-2 font-semibold">{s.systemType}</td>
+                          <td className="p-2">{s.thickness}</td>
+                          <td className="p-2">{s.material}</td>
+                          <td className="p-2">{s.facing}</td>
+                          <td className="p-2">{s.location}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <p className="text-sm text-gray-500 mt-2">No ductwork systems found.</p>}
+
+              {/* Piping Table */}
+              <h5 className="font-semibold text-blue-300 mt-4">Piping Systems</h5>
+              {specAnalysis.pipingSystems?.length > 0 ? (
+                <div className="overflow-x-auto mt-2">
+                  <table className="w-full text-xs whitespace-nowrap">
+                    <thead className="bg-gray-800">
+                      <tr>
+                        <th className="p-2 text-left">System Type</th>
+                        <th className="p-2 text-left">Thickness</th>
+                        <th className="p-2 text-left">Material</th>
+                        <th className="p-2 text-left">Jacket</th>
+                        <th className="p-2 text-left">Location</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {specAnalysis.pipingSystems.map((s, i) => (
+                        <tr key={i} className="border-b border-gray-700">
+                          <td className="p-2 font-semibold">{s.systemType}</td>
+                          <td className="p-2">{s.thickness}</td>
+                          <td className="p-2">{s.material}</td>
+                          <td className="p-2">{s.jacket}</td>
+                          <td className="p-2">{s.location}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : <p className="text-sm text-gray-500 mt-2">No piping systems found.</p>}
+
+              {/* Summary Sections */}
+              <AnalysisSection title="✓ Confirmed Requirements" items={specAnalysis.summary.confirmed} itemClass="text-green-300" symbol="✓" />
+              <AnalysisSection title="⚠️ Needs Clarification" items={specAnalysis.summary.clarificationNeeded} itemClass="text-yellow-300" symbol="⚠️" />
+              <AnalysisSection title="💡 Assumptions Made" items={specAnalysis.summary.assumptions} itemClass="text-purple-300" symbol="💡" />
+              <AnalysisSection title="📋 Special Requirements" items={specAnalysis.specialRequirements} symbol="📋" />
+              <AnalysisSection title="❓ Ambiguities Found" items={specAnalysis.ambiguities} itemClass="text-red-400" symbol="❓" />
             </div>
           )}
         </div>
         {/* Drawings Column */}
         <div>
           <h3 className="text-lg font-semibold text-blue-300 mb-3">Drawings (PDF)</h3>
-          <Input label="Upload Drawing File" id="drawingFile" type="file" accept=".pdf" onChange={onDrawingUpload} disabled={isDrawingLoading} />
-          {isDrawingLoading && <div className="flex items-center mt-4 text-blue-300"><Spinner />Analyzing Drawings...</div>}
+           <Button onClick={() => drawingFileInputRef.current?.click()} disabled={isDrawingLoading} className="w-full">
+              {isDrawingLoading ? <><Spinner/> Analyzing...</> : "Perform AI Takeoff"}
+           </Button>
+           <input ref={drawingFileInputRef} type="file" accept=".pdf" onChange={onDrawingUpload} disabled={isDrawingLoading} className="hidden" />
+
           {drawingAnalysis && (
             <div className="mt-4 p-4 bg-gray-900/50 rounded-lg border border-gray-700 max-h-60 overflow-y-auto">
               <h4 className="font-bold text-white">Takeoff Summary:</h4>
@@ -313,6 +471,7 @@ const DocumentUploadStep: React.FC<{
         </div>
       </div>
     </Card>
+    </>
   );
 };
 
@@ -323,7 +482,8 @@ const TakeoffEntryStep: React.FC<{
   setPiping: React.Dispatch<React.SetStateAction<TakeoffItem[]>>;
 }> = ({ ductwork, setDuctwork, piping, setPiping }) => {
   
-  const handleItemChange = <T extends TakeoffItem, >(id: string, field: keyof Omit<T, 'id'>, value: string | number, setter: React.Dispatch<React.SetStateAction<T[]>>) => {
+  // FIX: Updated function signature to be more type-safe, which resolves a TypeScript error at the call sites.
+  const handleItemChange = <T extends TakeoffItem, K extends keyof Omit<T, 'id'>>(id: string, field: K, value: T[K], setter: React.Dispatch<React.SetStateAction<T[]>>) => {
     setter(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
   
@@ -335,7 +495,8 @@ const TakeoffEntryStep: React.FC<{
     setter(prev => prev.filter(item => item.id !== id));
   };
   
-  const renderTakeoffTable = <T extends TakeoffItem, >(title: string, items: T[], setter: React.Dispatch<React.SetStateAction<T[]>>, newItem: T) => (
+  // FIX: Removed generic <T> from renderTakeoffTable and used TakeoffItem directly. This fixes type inference issues in the nested handleItemChange calls.
+  const renderTakeoffTable = (title: string, items: TakeoffItem[], setter: React.Dispatch<React.SetStateAction<TakeoffItem[]>>, newItem: TakeoffItem) => (
     <div>
       <h3 className="text-lg font-semibold text-blue-300 mb-3">{title}</h3>
       <div className="overflow-x-auto">
@@ -511,15 +672,69 @@ const useQuoteCalculator = (ductwork: TakeoffItem[], piping: TakeoffItem[], pric
     }, [ductwork, piping, pricing]);
 };
 
+// Consistency Validation Rules
+const validateQuoteConsistency = (
+    specAnalysis: GeminiSpecAnalysis | null,
+    ductwork: TakeoffItem[],
+    piping: TakeoffItem[],
+    calculatedData: { lineItems: CalculatedLineItem[], adjustedLaborHours: number }
+): string[] => {
+    const issues: string[] = [];
+
+    // Check 1: Spec systems vs. Takeoff quantities
+    if (specAnalysis) {
+        if (specAnalysis.ductworkSystems.length > 0 && ductwork.reduce((sum, item) => sum + item.length, 0) === 0) {
+            issues.push("⚠️ Ductwork is specified in the specs, but no takeoff quantities have been entered.");
+        }
+        if (specAnalysis.pipingSystems.length > 0 && piping.reduce((sum, item) => sum + item.length, 0) === 0) {
+            issues.push("⚠️ Piping is specified in the specs, but no takeoff quantities have been entered.");
+        }
+    }
+
+    // Check 2: All takeoff items have pricing
+    calculatedData.lineItems.forEach(item => {
+        if (item.type === 'material' && item.total === 0 && item.quantity > 0) {
+            issues.push(`⚠️ "${item.description}" has a quantity but the total price is zero. Check pricing constants.`);
+        }
+    });
+
+    // Check 3: Labor hours reasonable
+    const totalLF = [...ductwork, ...piping].reduce((sum, item) => sum + item.length, 0);
+    const totalHours = calculatedData.adjustedLaborHours;
+
+    if (totalLF > 50 && totalHours > 0) { // Only check for non-trivial amounts
+        const ductLF = ductwork.reduce((sum, item) => sum + item.length, 0);
+        const pipeLF = piping.reduce((sum, item) => sum + item.length, 0);
+        
+        // Use a weighted average production rate for more accuracy
+        const expectedDuctHours = ductLF / LABOR_RATES.duct_rectangular_medium;
+        const expectedPipeHours = pipeLF / LABOR_RATES.pipe_medium;
+        const expectedHours = expectedDuctHours + expectedPipeHours;
+        
+        // Allow for a 40% variance to account for fittings, complexity, and adjustments
+        if (Math.abs(totalHours - expectedHours) / expectedHours > 0.4) {
+            issues.push(`⚠️ Labor hours (${totalHours.toFixed(1)} hrs) seem ${totalHours > expectedHours ? 'high' : 'low'} for the scope (${totalLF} LF). Consider the Labor Adjustment Factor.`);
+        }
+    } else if (totalLF > 0 && totalHours === 0) {
+        issues.push("⚠️ Takeoff quantities exist but no labor hours were calculated.");
+    }
+
+    return issues;
+};
 
 const ReviewAndPriceStep: React.FC<{
   pricing: PricingSettings;
   setPricing: React.Dispatch<React.SetStateAction<PricingSettings>>;
   ductwork: TakeoffItem[];
   piping: TakeoffItem[];
-}> = ({ pricing, setPricing, ductwork, piping }) => {
+  specAnalysis: GeminiSpecAnalysis | null;
+}> = ({ pricing, setPricing, ductwork, piping, specAnalysis }) => {
     
-    const { grandTotal, baseMaterialCost, materialWithMarkup, baseLaborCost, laborWithMarkup, subtotal, overheadAndProfitAmount, contingencyAmount } = useQuoteCalculator(ductwork, piping, pricing);
+    const calculatedData = useQuoteCalculator(ductwork, piping, pricing);
+    const { grandTotal, baseMaterialCost, materialWithMarkup, baseLaborCost, laborWithMarkup, subtotal, overheadAndProfitAmount, contingencyAmount } = calculatedData;
+    const consistencyIssues = validateQuoteConsistency(specAnalysis, ductwork, piping, calculatedData);
+    const [validationVisible, setValidationVisible] = useState(false);
+
 
     const handlePricingChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setPricing(prev => ({ ...prev, [e.target.name]: parseFloat(e.target.value) || 0 }));
@@ -527,11 +742,10 @@ const ReviewAndPriceStep: React.FC<{
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 space-y-8">
                 <Card>
-                    <h2 className="text-2xl font-bold text-white mb-6">Review & Price</h2>
+                    <h2 className="text-2xl font-bold text-white mb-6">Pricing Settings</h2>
                     <div className="space-y-4">
-                      {/* Pricing sliders */}
                       {[
                         { name: 'materialMarkup', label: 'Material Markup (%)', value: pricing.materialMarkup },
                         { name: 'laborMarkup', label: 'Labor Markup (%)', value: pricing.laborMarkup },
@@ -546,6 +760,25 @@ const ReviewAndPriceStep: React.FC<{
                         </div>
                       ))}
                     </div>
+                </Card>
+                <Card>
+                    <div className="flex justify-between items-center mb-4">
+                      <h2 className="text-2xl font-bold text-white">Consistency Check</h2>
+                      <Button onClick={() => setValidationVisible(true)}>Validate Consistency</Button>
+                    </div>
+                    {validationVisible && (
+                        <>
+                          {consistencyIssues.length > 0 ? (
+                            <ul className="space-y-2">
+                              {consistencyIssues.map((issue, index) => (
+                                <li key={index} className="text-yellow-300 text-sm">{issue}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-green-400 font-semibold">✅ All consistency checks passed.</p>
+                          )}
+                        </>
+                    )}
                 </Card>
             </div>
             <div>
@@ -584,8 +817,8 @@ const GeneratedQuoteStep: React.FC<{
   piping: TakeoffItem[];
   pricing: PricingSettings;
   specAnalysis: GeminiSpecAnalysis | null;
-  quoteTemplate: 'detailed' | 'summary';
-  setQuoteTemplate: React.Dispatch<React.SetStateAction<'detailed' | 'summary'>>;
+  quoteTemplate: 'detailed' | 'summary' | 'budget';
+  setQuoteTemplate: React.Dispatch<React.SetStateAction<'detailed' | 'summary' | 'budget'>>;
 }> = (props) => {
     const { lineItems, bom, grandTotal, materialWithMarkup, laborWithMarkup, subtotal, overheadAndProfitAmount, contingencyAmount } = useQuoteCalculator(props.ductwork, props.piping, props.pricing);
     
@@ -645,7 +878,7 @@ const GeneratedQuoteStep: React.FC<{
                <p className="text-sm">Guaranteed Insulation proposes to furnish and install mechanical insulation for the systems listed below, based on the project specifications provided.</p>
                {props.specAnalysis && (
                   <ul className="text-sm list-disc list-inside mt-2 space-y-1">
-                      {props.specAnalysis.summary.map((item, index) => <li key={index}>{item}</li>)}
+                      {props.specAnalysis.summary.confirmed.map((item, index) => <li key={index}>{item}</li>)}
                   </ul>
                )}
           </div>
@@ -664,17 +897,52 @@ const GeneratedQuoteStep: React.FC<{
       </div>
     );
     
+     const BudgetQuote = () => {
+        const budgetRangeLower = grandTotal - contingencyAmount;
+        const budgetRangeUpper = grandTotal + contingencyAmount;
+
+        return (
+            <div className="bg-white text-black p-8 font-sans printable-area">
+                <QuoteHeader />
+                <h2 className="text-2xl font-semibold mt-4 text-center border-b-2 border-black pb-2 mb-6">BUDGETARY ESTIMATE</h2>
+                <ProjectInfoTable />
+                
+                <div className="mb-8">
+                    <h3 className="font-bold text-lg border-b border-gray-400 mb-2">HIGH-LEVEL SCOPE</h3>
+                    <p className="text-sm">This budgetary estimate covers the furnishing and installation of mechanical insulation for the primary HVAC systems as understood from preliminary documents. The scope generally includes:</p>
+                    <ul className="text-sm list-disc list-inside mt-2 space-y-1">
+                        {props.ductwork.length > 0 && <li>Insulation for rectangular and round ductwork (supply, return, exhaust).</li>}
+                        {props.piping.length > 0 && <li>Insulation for mechanical piping (chilled water, heating water, etc.).</li>}
+                        <li>Associated fittings, vapor barriers, and sealants as per standard industry practice.</li>
+                    </ul>
+                </div>
+                
+                <div className="my-10 text-center bg-gray-100 p-6 rounded-lg">
+                    <p className="text-gray-700 uppercase tracking-wider">Estimated Project Budget Range</p>
+                    <p className="text-4xl font-bold tracking-tight mt-2">
+                        {budgetRangeLower.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })} - {budgetRangeUpper.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}
+                    </p>
+                    <p className="text-sm text-gray-600 mt-2">Final pricing subject to detailed takeoff and final specifications.</p>
+                </div>
+
+                <div className="text-xs text-gray-600 mt-8 space-y-2">
+                    <h4 className="font-bold uppercase">Allowances & Clarifications:</h4>
+                    <p>This estimate includes allowances for typical quantities of fittings and accessories. It excludes work on existing systems, demolition, premium time, and specialized access equipment unless otherwise noted. This is for planning purposes and is not a firm bid.</p>
+                </div>
+            </div>
+        );
+    };
+
     const DetailedQuote = () => {
-        // FIX: The `reduce` call was not correctly typed, causing `items` in the `.map()` below to be of type `unknown`.
-        // By casting the initial value `{}`, TypeScript can correctly infer the type of `groupedLineItems`.
-        const groupedLineItems = lineItems.reduce((acc: Record<string, CalculatedLineItem[]>, item) => {
+        // FIX: Correctly typed the accumulator for the reduce function to resolve 'map' does not exist on type 'unknown' error.
+        const groupedLineItems = lineItems.reduce<Record<string, CalculatedLineItem[]>>((acc, item) => {
             const category = item.category || 'Miscellaneous';
             if (!acc[category]) {
                 acc[category] = [];
             }
             acc[category].push(item);
             return acc;
-        }, {} as Record<string, CalculatedLineItem[]>);
+        }, {});
 
         return (
             <div className="bg-white text-black p-8 font-sans printable-area">
@@ -688,7 +956,7 @@ const GeneratedQuoteStep: React.FC<{
                     <p className="text-sm">Guaranteed Insulation shall furnish and install mechanical insulation per project specifications. All work to be performed in a neat and workmanlike manner, conforming to industry standards such as ASTM and SMACNA.</p>
                     {props.specAnalysis && (
                         <ul className="text-sm list-disc list-inside mt-2 space-y-1">
-                           {props.specAnalysis.summary.map((item, index) => <li key={index}>{item}</li>)}
+                           {props.specAnalysis.summary.confirmed.map((item, index) => <li key={index}>{item}</li>)}
                         </ul>
                     )}
                 </div>
@@ -760,23 +1028,21 @@ const GeneratedQuoteStep: React.FC<{
     }
     
     const Quote = () => {
-        if (props.quoteTemplate === 'summary') {
-            return <SummaryQuote />;
-        }
+        if (props.quoteTemplate === 'summary') return <SummaryQuote />;
+        if (props.quoteTemplate === 'budget') return <BudgetQuote />;
         return <DetailedQuote />;
     };
 
     const BillOfMaterials = () => {
-      // FIX: The `reduce` call was not correctly typed, causing `items` in the `.map()` below to be of type `unknown`.
-      // By casting the initial value `{}`, TypeScript can correctly infer the type of `bomByCategory`.
-      const bomByCategory = bom.reduce((acc, item) => {
+      // FIX: Correctly typed the accumulator for the reduce function to resolve 'map' does not exist on type 'unknown' error.
+      const bomByCategory = bom.reduce<Record<string, BillOfMaterialsItem[]>>((acc, item) => {
         const category = item.category;
         if (!acc[category]) {
             acc[category] = [];
         }
         acc[category].push(item);
         return acc;
-      }, {} as Record<string, BillOfMaterialsItem[]>);
+      }, {});
 
       return (
         <div className="bg-white text-black p-8 font-sans printable-area">
@@ -823,9 +1089,18 @@ const GeneratedQuoteStep: React.FC<{
                         </div>
                         <div className="border-l border-gray-600 h-6"></div>
                         <div className="flex gap-2 items-center">
-                            <span className="text-gray-400 self-center text-sm">Template:</span>
-                            <Button variant={props.quoteTemplate === 'detailed' ? 'primary' : 'secondary'} onClick={() => props.setQuoteTemplate('detailed')} size="sm" disabled={view !== 'quote'}>Detailed</Button>
-                            <Button variant={props.quoteTemplate === 'summary' ? 'primary' : 'secondary'} onClick={() => props.setQuoteTemplate('summary')} size="sm" disabled={view !== 'quote'}>Summary</Button>
+                            <label htmlFor="quoteTemplate" className="text-gray-400 self-center text-sm">Template:</label>
+                            <select
+                              id="quoteTemplate"
+                              value={props.quoteTemplate}
+                              onChange={(e) => props.setQuoteTemplate(e.target.value as any)}
+                              className="bg-gray-800 border border-gray-600 rounded-md px-3 py-1 text-sm text-gray-100 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                              disabled={view !== 'quote'}
+                            >
+                              <option value="detailed">Detailed</option>
+                              <option value="summary">Summary</option>
+                              <option value="budget">Budget</option>
+                            </select>
                         </div>
                     </div>
                 </div>

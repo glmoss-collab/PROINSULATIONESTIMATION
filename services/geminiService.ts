@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import type { GeminiSpecAnalysis, GeminiDrawingAnalysis } from '../types';
 
@@ -15,51 +16,74 @@ const fileToGenerativePart = async (file: File) => {
 };
 
 const specAnalysisSchema = {
-  type: Type.OBJECT,
-  properties: {
-    projectInfo: {
-        type: Type.OBJECT,
-        description: "Project identification details, typically found on the cover sheet.",
-        properties: {
-            projectName: { type: Type.STRING, description: "The official name of the project." },
-            location: { type: Type.STRING, description: "The city and state, or full address of the project." },
-            customer: { type: Type.STRING, description: "The name of the client, General Contractor, or Mechanical Contractor." },
-            date: { type: Type.STRING, description: "The specification issue date, in YYYY-MM-DD format." },
+    type: Type.OBJECT,
+    properties: {
+        projectInfo: {
+            type: Type.OBJECT,
+            description: "Project identification details, typically found on the cover sheet.",
+            properties: {
+                projectName: { type: Type.STRING, description: "The official name of the project." },
+                location: { type: Type.STRING, description: "The city and state, or full address of the project." },
+                customer: { type: Type.STRING, description: "The name of the client, General Contractor, or Mechanical Contractor." },
+                date: { type: Type.STRING, description: "The specification issue date, in YYYY-MM-DD format." },
+            }
+        },
+        ductworkSystems: {
+            type: Type.ARRAY,
+            description: "Detailed insulation requirements for each type of ductwork system.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    systemType: { type: Type.STRING, description: "e.g., Supply, Return, Exhaust, Outdoor" },
+                    sizeRange: { type: Type.STRING, description: "Applicable duct sizes, e.g., 'All' or '> 24\"'" },
+                    thickness: { type: Type.STRING, description: "Insulation thickness, e.g., '1.5 inches'" },
+                    material: { type: Type.STRING, description: "Insulation material, e.g., 'Fiberglass'" },
+                    facing: { type: Type.STRING, description: "Facing material, e.g., 'FSK'" },
+                    location: { type: Type.STRING, description: "e.g., 'Interior', 'Unconditioned space', 'Exterior'" },
+                    specialReq: { type: Type.STRING, description: "Any special requirements for this system." },
+                },
+                required: ["systemType", "thickness", "material"],
+            },
+        },
+        pipingSystems: {
+            type: Type.ARRAY,
+            description: "Detailed insulation requirements for each type of piping system.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    systemType: { type: Type.STRING, description: "e.g., CHW Supply, HW Return, Condensate" },
+                    sizeRange: { type: Type.STRING, description: "Applicable pipe sizes, e.g., 'Up to 2\"' or 'All'" },
+                    thickness: { type: Type.STRING, description: "Insulation thickness, e.g., '1 inch'" },
+                    material: { type: Type.STRING, description: "Insulation material, e.g., 'Elastomeric' or 'Fiberglass'" },
+                    jacket: { type: Type.STRING, description: "Jacket type, e.g., 'ASJ' or 'Aluminum'" },
+                    location: { type: Type.STRING, description: "e.g., 'Interior', 'Exterior'" },
+                    specialReq: { type: Type.STRING, description: "Any special requirements for this system." },
+                },
+                required: ["systemType", "thickness", "material"],
+            },
+        },
+        specialRequirements: {
+            type: Type.ARRAY,
+            description: "A list of general special requirements not tied to a specific system.",
+            items: { type: Type.STRING },
+        },
+        ambiguities: {
+            type: Type.ARRAY,
+            description: "A list of ambiguities, conflicts, or missing information found in the document.",
+            items: { type: Type.STRING },
+        },
+        summary: {
+            type: Type.OBJECT,
+            description: "A final summary of findings.",
+            properties: {
+                confirmed: { type: Type.ARRAY, items: { type: Type.STRING }, description: "List of clearly specified requirements." },
+                clarificationNeeded: { type: Type.ARRAY, items: { type: Type.STRING }, description: "List of items that need clarification." },
+                assumptions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "List of assumptions made." },
+            },
+            required: ["confirmed", "clarificationNeeded", "assumptions"],
         }
     },
-    ductwork: {
-      type: Type.OBJECT,
-      required: ["material", "thickness", "facing"],
-      properties: {
-        material: { type: Type.STRING },
-        thickness: { type: Type.STRING },
-        facing: { type: Type.STRING },
-      },
-    },
-    piping: {
-      type: Type.OBJECT,
-      required: ["material", "thickness", "jacketing"],
-      properties: {
-        material: { type: Type.STRING },
-        thickness: { type: Type.STRING },
-        jacketing: { type: Type.STRING },
-      },
-    },
-    outdoor: {
-        type: Type.OBJECT,
-        required: ["jacketing", "requirements"],
-        properties: {
-            jacketing: { type: Type.STRING },
-            requirements: { type: Type.STRING },
-        },
-    },
-    summary: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: "A detailed executive list of system requirements, installation methods, and all materials needed by the insulation subcontractor that may affect pricing.",
-    },
-  },
-  required: ["ductwork", "piping", "outdoor", "summary"],
+    required: ["ductworkSystems", "pipingSystems", "specialRequirements", "ambiguities", "summary"],
 };
 
 const drawingAnalysisSchema = {
@@ -96,27 +120,45 @@ const drawingAnalysisSchema = {
 };
 
 export const analyzeSpecification = async (file: File): Promise<GeminiSpecAnalysis> => {
-  const systemInstruction = "You are an AI-powered HVAC mechanical insulation estimation service for Guaranteed Insulation. Your role is to act as a senior estimator reviewing a new project specification. Respond ONLY with the JSON object as defined by the schema.";
-  
-  const userPrompt = `Analyze this specification PDF (Division 23).
+    const systemInstruction = `You are an AI-powered HVAC mechanical insulation estimation service for Guaranteed Insulation. Your role is to act as a senior estimator reviewing a new project specification. You must analyze the attached document and provide a full JSON output that adheres to the provided schema.
 
-1.  **Project Information:** Extract Project Name, Location, Customer/Contractor, and issue Date from the cover page.
-2.  **Insulation Requirements:** Extract the core requirements for Ductwork, Piping, and Outdoor systems, focusing on material, thickness, and facing/jacketing.
-3.  **Executive Summary (Detailed List):** This is the most critical part. Create a detailed bullet-point list for the 'summary' field. This list must be comprehensive for an insulation subcontractor. For each system (e.g., Supply Air Duct, CHW Pipe), include:
-    *   **Primary Insulation:** Material and thickness (e.g., "1.5\\" Fiberglass Duct Wrap").
-    *   **Facing/Jacketing:** (e.g., "FSK Facing", "ASJ Jacketing", "0.016 Aluminum Jacketing on exterior runs").
-    *   **Installation Method:** Key methods specified (e.g., "Full adhesive coverage", "All joints sealed with matching tape", "Vapor barrier mastic on all seams and punctures").
-    *   **Required Accessories:** Explicitly list all required accessory materials that will impact the price, such as: FSK/ASJ tape, adhesives, mastics, vapor barriers, insulation saddles/shields at hangers, stainless steel bands, PVC fitting covers, etc.
-    *   **Scope Notes:** Mention any other important details like requirements for fire-rated areas, specific sealant products, or pressure testing.`;
+SPECIFICATION EXTRACTION PROTOCOL:
 
-  const parts = [
-    { text: userPrompt },
-    await fileToGenerativePart(file),
-  ];
+When analyzing the uploaded project specification PDF, follow this exact sequence:
+
+STEP 1: LOCATE INSULATION SECTION
+- Search for: "Division 23", "23 07 19", "HVAC Insulation", "Mechanical Insulation"
+- If not found, search for: "insulation" in Division 15, 22, or 23
+
+STEP 2: EXTRACT BY SYSTEM TYPE
+- Populate the 'ductworkSystems' and 'pipingSystems' arrays. Create one object for each distinct system type found in the specification.
+- For each system, fill in all fields (Size Range, Thickness, Material, etc.) as specified in the document. If information is not available for a field, leave it as an empty string.
+
+STEP 3: EXTRACT SPECIAL REQUIREMENTS
+- Identify and list general requirements that apply across multiple systems.
+- Examples: Vapor barrier details, mastic application rules, outdoor jacketing specifics, fire rating needs, acoustic performance, access panel insulation, equipment insulation.
+- Populate the 'specialRequirements' array with these findings.
+
+STEP 4: IDENTIFY AMBIGUITIES
+- Carefully read for any conflicting or missing information.
+- Flag issues like:
+    - "Insulation thickness not specified for [system]"
+    - "Material type unclear for [system]"
+    - "Indoor vs outdoor requirements are not distinguished"
+    - "Conflicting requirements found in different sections"
+- Populate the 'ambiguities' array with these flagged issues.
+
+STEP 5: CREATE EXTRACTION SUMMARY
+- Populate the 'summary' object with three distinct lists:
+- 'confirmed': A list of all requirements that are clearly specified.
+- 'clarificationNeeded': A list of all ambiguities and conflicts that require clarification from the client.
+- 'assumptions': A list of any assumptions you had to make (e.g., "Assumed standard FSK facing where not specified").`;
+    
+  const filePart = await fileToGenerativePart(file);
   
   const response: GenerateContentResponse = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
-    contents: { parts: parts },
+    contents: { parts: [filePart] },
     config: {
       systemInstruction: systemInstruction,
       responseMimeType: 'application/json',
@@ -129,21 +171,18 @@ export const analyzeSpecification = async (file: File): Promise<GeminiSpecAnalys
 };
 
 export const analyzeDrawings = async (file: File): Promise<GeminiDrawingAnalysis> => {
-    const systemInstruction = "You are an AI-powered HVAC mechanical insulation estimation service. Your goal is to perform a takeoff for ductwork and piping from the provided drawings. Respond ONLY with the JSON object as defined by the schema.";
-    
-    const userPrompt = `Analyze these construction drawings (PDF).
-      Identify sizes (e.g., "18x12" or '2" CHW'), measure linear feet for each size, and count fittings (elbows, tees).
-      Note the drawing scale. Summarize your findings in the JSON format.
-      Be as accurate as possible with quantities. If a scale is not present, assume 1/4" = 1'-0" for mechanical plans.`;
+    const systemInstruction = `You are an AI-powered HVAC mechanical insulation estimation service. Your goal is to perform a takeoff for ductwork and piping from the provided drawings. Respond ONLY with the JSON object as defined by the schema.
 
-    const parts = [
-      { text: userPrompt },
-      await fileToGenerativePart(file),
-    ];
+Analyze the construction drawings (PDF).
+Identify sizes (e.g., "18x12" or '2" CHW'), measure linear feet for each size, and count fittings (elbows, tees).
+Note the drawing scale. Summarize your findings in the JSON format.
+Be as accurate as possible with quantities. If a scale is not present, assume 1/4" = 1'-0" for mechanical plans.`;
+
+    const filePart = await fileToGenerativePart(file);
 
     const response: GenerateContentResponse = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
-        contents: { parts: parts },
+        contents: { parts: [filePart] },
         config: {
             systemInstruction: systemInstruction,
             responseMimeType: 'application/json',

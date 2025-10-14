@@ -55,6 +55,26 @@ export interface BillOfMaterialsItem {
   quantity: string;
 }
 
+export interface DuctworkSpecItem {
+  systemType: string;
+  sizeRange: string;
+  thickness: string;
+  material: string;
+  facing: string;
+  location: string;
+  specialReq: string;
+}
+
+export interface PipingSpecItem {
+  systemType: string;
+  sizeRange: string;
+  thickness: string;
+  material: string;
+  jacket: string;
+  location:string;
+  specialReq: string;
+}
+
 export interface GeminiSpecAnalysis {
   projectInfo?: {
     projectName?: string;
@@ -62,11 +82,17 @@ export interface GeminiSpecAnalysis {
     customer?: string;
     date?: string;
   };
-  ductwork: { material: string; thickness: string; facing: string; };
-  piping: { material: string; thickness: string; jacketing: string; };
-  outdoor: { jacketing: string; requirements: string; };
-  summary: string[];
+  ductworkSystems: DuctworkSpecItem[];
+  pipingSystems: PipingSpecItem[];
+  specialRequirements: string[];
+  ambiguities: string[];
+  summary: {
+    confirmed: string[];
+    clarificationNeeded: string[];
+    assumptions: string[];
+  };
 }
+
 
 export interface GeminiDrawingAnalysis {
   ductwork: { size: string; length: number; fittings: number }[];
