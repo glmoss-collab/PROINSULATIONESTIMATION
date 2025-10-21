@@ -1,18 +1,152 @@
 
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import type { GeminiSpecAnalysis, GeminiDrawingAnalysis } from '../types';
+import type { GeminiSpecAnalysis, GeminiDrawingAnalysis, ProjectInfo, TakeoffItem } from '../types';
+import { generateQuoteFromUI } from '../estimator';
+
+// Enhanced pattern matching from process_my_pdfs.py
+const INSULATION_KEYWORDS = [
+    'insulation', 'thermal insulation', 'mechanical insulation',
+    'duct insulation', 'pipe insulation', 'fiberglass', 'elastomeric',
+    'FSK', 'ASJ', 'mastic', 'vapor barrier', 'jacketing'
+];
+
+const THICKNESS_PATTERNS = [
+    /(\d+\.?\d*)\s*["\']?\s*thick/i,
+    /thickness.*?(\d+\.?\d*)\s*["\']/i,
+    /(\d+\.?\d*)\s*inch.*?insulation/i,
+];
+
+const MATERIALS = ['fiberglass', 'mineral wool', 'elastomeric', 'cellular glass', 'polyisocyanurate'];
+const FACINGS = ['FSK', 'ASJ', 'All Service Jacket', 'Foil Scrim Kraft', 'white jacket', 'PVJ'];
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// Helper to extract text content from PDF file
+async function extractTextFromPDF(file: File): Promise<string> {
+    // Convert PDF to text using the PDF file reader parts from the generateContent API
+    const filePart = await fileToGenerativePart(file);
+    const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [filePart] },
+        config: {
+            systemInstruction: 'Extract all text content from this PDF file.',
+            responseMimeType: 'text/plain',
+        },
+    });
+    return response.text;
+}
+
+// Helper to validate and enhance spec analysis with pattern matching
+function enhanceSpecAnalysis(text: string, analysis: GeminiSpecAnalysis): GeminiSpecAnalysis {
+    // Look for additional thickness specs
+    const thicknessMatches = new Set<string>();
+    for (const pattern of THICKNESS_PATTERNS) {
+        const matches = text.matchAll(pattern);
+        for (const match of matches) {
+            thicknessMatches.add(match[0]);
+        }
+    }
+
+    // Look for additional materials
+    const materialMatches = new Set<string>();
+    for (const material of MATERIALS) {
+        if (text.toLowerCase().includes(material)) {
+            materialMatches.add(material);
+        }
+    }
+
+    // Look for additional facings
+    const facingMatches = new Set<string>();
+    for (const facing of FACINGS) {
+        if (text.toLowerCase().includes(facing.toLowerCase())) {
+            facingMatches.add(facing);
+        }
+    }
+
+    // Add any found specs not already in the analysis
+    for (const system of analysis.ductworkSystems) {
+        if (!system.thickness) {
+            const foundThickness = Array.from(thicknessMatches)[0];
+            if (foundThickness) {
+                const match = foundThickness.match(/(\d+\.?\d*)/);
+                if (match) system.thickness = match[1];
+            }
+        }
+        if (!system.material && materialMatches.size > 0) {
+            system.material = Array.from(materialMatches)[0];
+        }
+        if (!system.facing && facingMatches.size > 0) {
+            system.facing = Array.from(facingMatches)[0];
+        }
+    }
+
+    for (const system of analysis.pipingSystems) {
+        if (!system.thickness) {
+            const foundThickness = Array.from(thicknessMatches)[0];
+            if (foundThickness) {
+                const match = foundThickness.match(/(\d+\.?\d*)/);
+                if (match) system.thickness = match[1];
+            }
+        }
+        if (!system.material && materialMatches.size > 0) {
+            system.material = Array.from(materialMatches)[0];
+        }
+        if (!system.jacket && facingMatches.size > 0) {
+            system.jacket = Array.from(facingMatches)[0];
+        }
+    }
+
+    return analysis;
+}
+
+// Helper to generate preview quote from spec analysis
+function generatePreviewQuoteFromSpec(analysis: GeminiSpecAnalysis): { takeoff: TakeoffItem[], projectInfo: ProjectInfo } {
+    // Create example takeoff items based on spec systems
+    const takeoff: TakeoffItem[] = [];
+
+    analysis.ductworkSystems.forEach((system, i) => {
+        // Create a reasonable example size based on system type
+        const size = system.systemType.toLowerCase().includes('return') ? '24x16' : '18x12';
+        takeoff.push({
+            id: `DUCT_PREVIEW_${i}`,
+            size,
+            length: 100, // Example length
+            fittings: 4,  // Example fitting count
+        });
+    });
+
+    analysis.pipingSystems.forEach((system, i) => {
+        // Parse size range for a reasonable example
+        const size = system.sizeRange ? system.sizeRange.match(/\d+/)?.[0] || '2' : '2';
+        takeoff.push({
+            id: `PIPE_PREVIEW_${i}`,
+            size: `${size}" ${system.systemType}`,
+            length: 75, // Example length
+            fittings: 6, // Example fitting count
+        });
+    });
+
+    // Create project info from analysis
+    const projectInfo: ProjectInfo = {
+        projectName: analysis.projectInfo?.projectName || 'New Project',
+        location: analysis.projectInfo?.location || 'TBD',
+        customer: analysis.projectInfo?.customer || 'TBD',
+        date: analysis.projectInfo?.date || new Date().toISOString().split('T')[0],
+        quoteNumber: `PREV-${Math.floor(Math.random() * 10000)}`,
+    };
+
+    return { takeoff, projectInfo };
+}
+
 const fileToGenerativePart = async (file: File) => {
-  const base64EncodedDataPromise = new Promise<string>((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
-    reader.readAsDataURL(file);
-  });
-  return {
-    inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
-  };
+    const base64EncodedDataPromise = new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+        reader.readAsDataURL(file);
+    });
+    return {
+        inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
+    };
 };
 
 const specAnalysisSchema = {
@@ -153,21 +287,37 @@ STEP 5: CREATE EXTRACTION SUMMARY
 - 'confirmed': A list of all requirements that are clearly specified.
 - 'clarificationNeeded': A list of all ambiguities and conflicts that require clarification from the client.
 - 'assumptions': A list of any assumptions you had to make (e.g., "Assumed standard FSK facing where not specified").`;
-    
-  const filePart = await fileToGenerativePart(file);
-  
-  const response: GenerateContentResponse = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: { parts: [filePart] },
-    config: {
-      systemInstruction: systemInstruction,
-      responseMimeType: 'application/json',
-      responseSchema: specAnalysisSchema,
-    },
-  });
 
-  const jsonText = response.text.trim();
-  return JSON.parse(jsonText);
+    const filePart = await fileToGenerativePart(file);
+
+    const response: GenerateContentResponse = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: { parts: [filePart] },
+        config: {
+            systemInstruction: systemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: specAnalysisSchema,
+        },
+    });
+
+    // Extract raw text and enhance the analysis
+    const rawText = await extractTextFromPDF(file);
+    const initialAnalysis = JSON.parse(response.text.trim()) as GeminiSpecAnalysis;
+    const enhancedAnalysis = enhanceSpecAnalysis(rawText, initialAnalysis);
+
+    return enhancedAnalysis;
+};
+
+// New function to get a preview quote right after spec analysis
+export const generatePreviewFromSpec = async (specAnalysis: GeminiSpecAnalysis) => {
+    const { takeoff, projectInfo } = generatePreviewQuoteFromSpec(specAnalysis);
+    const quote = generateQuoteFromUI(
+        projectInfo,
+        takeoff.filter(t => t.id.startsWith('DUCT')),
+        takeoff.filter(t => t.id.startsWith('PIPE')),
+        specAnalysis
+    );
+    return { quote, takeoff, projectInfo };
 };
 
 export const analyzeDrawings = async (file: File): Promise<GeminiDrawingAnalysis> => {

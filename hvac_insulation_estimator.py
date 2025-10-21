@@ -18,10 +18,38 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-import cv2
-import numpy as np
+import importlib
+
+# Dynamically import OpenCV if available; otherwise set to None so the rest of the
+# code can run without raising an ImportError in environments where cv2 is not installed.
+try:
+    cv2 = importlib.import_module("cv2")
+except Exception:
+    cv2 = None
+
+# Dynamically import NumPy if available; otherwise provide a minimal shim so the
+# rest of the code can run in environments without numpy (limited functionality).
+try:
+    np = importlib.import_module("numpy")
+except Exception:
+    import math as _math
+
+    class _MinimalNumpy:
+        pi = _math.pi
+
+        @staticmethod
+        def array(x):
+            # best-effort: if x is a PIL Image or similar, return as-is
+            return x
+
+        @staticmethod
+        def hypot(a, b):
+            return _math.hypot(a, b)
+
+    np = _MinimalNumpy()
+
 import pdfplumber
 
 
@@ -178,6 +206,27 @@ class SpecificationExtractor:
         return None
 
     def _extract_special_requirements(self, text: str, specs: List[InsulationSpec]) -> None:
+        """Extract special insulation requirements from text."""
+        requirements_patterns = {
+            "aluminum_jacket": r"aluminum\s+jacket|metal\s+jacket",
+            "vapor_barrier": r"vapor\s+barrier|vapor\s+seal",
+            "weatherproof": r"weather\s*proof|weather\s*resistant",
+            "antimicrobial": r"anti\s*microbial|mold\s*resistant",
+            "stainless_bands": r"stainless\s+bands|steel\s+bands",
+        }
+
+        text_lower = text.lower()
+        for spec in specs:
+            for req, pattern in requirements_patterns.items():
+                if re.search(pattern, text_lower):
+                    if req not in spec.special_requirements:
+                        spec.special_requirements.append(req)
+
+            # Outdoor/exposed location detection
+            if re.search(r"outdoor|exterior|outside|exposed", text_lower):
+                spec.location = "outdoor"
+            elif re.search(r"exposed|uncovered|visible", text_lower):
+                spec.location = "exposed"
         """Extract special requirements like mastic, weatherproofing."""
 
         text_lower = text.lower()
@@ -243,27 +292,51 @@ class DrawingMeasurementExtractor:
         return 48  # default 1/4" scale
 
     def measure_from_drawing(self, pdf_path: str, page_number: int = 0) -> List[MeasurementItem]:
-        """Extract measurements from drawing using computer vision."""
+        """Extract measurements from PDF drawing.
+
+        Converts the requested PDF page to an image (via pdf2image), runs
+        the internal CV detector and returns a list of MeasurementItem.
+        The method gracefully degrades if pdf2image / OpenCV are not
+        available or an error occurs.
+        """
 
         measurements: List[MeasurementItem] = []
 
-        # Convert PDF page to image
-        from pdf2image import convert_from_path
+        try:
+            # Convert only the requested page to an image (pdf2image expects 1-based pages)
+            from pdf2image import convert_from_path
 
-        images = convert_from_path(pdf_path, first_page=page_number + 1, last_page=page_number + 1)
+            images = convert_from_path(pdf_path, first_page=page_number + 1, last_page=page_number + 1)
+            if not images:
+                return measurements
 
-        if images:
-            img = np.array(images[0])
+            image = images[0]
+            image_np = np.array(image)
 
-            # Detect lines (ductwork and piping)
-            measurements.extend(self._detect_lines_and_measure(img))
+            # Run the CV detector
+            measurements = self._detect_lines_and_measure(image_np)
+
+            # If no scale supplied and no measurements found, try to auto-detect scale and retry
+            if not self.scale and not measurements:
+                self.scale = self.extract_scale_from_pdf(pdf_path)
+                if self.scale:
+                    measurements = self._detect_lines_and_measure(image_np)
+
+        except Exception as e:
+            # Keep behavior non-fatal for environments without optional deps
+            print(f"Error processing drawing: {e}")
 
         return measurements
 
-    def _detect_lines_and_measure(self, image: np.ndarray) -> List[MeasurementItem]:
+    def _detect_lines_and_measure(self, image: Any) -> List[MeasurementItem]:
         """Use computer vision to detect and measure lines."""
 
         measurements: List[MeasurementItem] = []
+
+        # If OpenCV is not available, gracefully return empty measurements.
+        if cv2 is None:
+            # cv2 not installed; cannot perform CV operations in this environment.
+            return measurements
 
         # Convert to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -272,21 +345,32 @@ class DrawingMeasurementExtractor:
         edges = cv2.Canny(gray, 50, 150, apertureSize=3)
 
         # Detect lines using Hough transform
-        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100, minLineLength=50, maxLineGap=10)
+        # Use numpy's pi if available, otherwise fallback
+        try:
+            angle_step = np.pi / 180
+        except Exception:
+            angle_step = 3.14159 / 180
+
+        lines = cv2.HoughLinesP(edges, 1, angle_step, threshold=100, minLineLength=50, maxLineGap=10)
 
         if lines is not None:
             for i, line in enumerate(lines):
                 x1, y1, x2, y2 = line[0]
 
-                # Calculate length in pixels
-                length_pixels = float(np.hypot(x2 - x1, y2 - y1))
+                # Calculate length in pixels (use math.hypot fallback if needed)
+                try:
+                    length_pixels = float(np.hypot(x2 - x1, y2 - y1))
+                except Exception:
+                    import math as _math
+                    length_pixels = float(_math.hypot(x2 - x1, y2 - y1))
 
-                # Convert to real dimensions using scale
+                # Convert to real dimensions using scale (if provided)
                 if self.scale:
                     length_inches = length_pixels * self.scale
-                    length_feet = length_inches / 12
+                    length_feet = length_inches / 12.0
                 else:
-                    length_feet = length_pixels  # placeholder
+                    # No scale provided: return pixel length as placeholder
+                    length_feet = length_pixels
 
                 # Create measurement item
                 measurement = MeasurementItem(
@@ -324,7 +408,8 @@ class DrawingMeasurementExtractor:
 class PricingEngine:
     """Calculate material quantities and pricing."""
 
-    def __init__(self, price_book_path: Optional[str] = None) -> None:
+    def __init__(self, price_book_path: Optional[str] = None, markup: float = 1.0) -> None:
+        self.markup = markup
         self.prices = self._load_prices(price_book_path)
         self.labor_rates = {
             "duct_insulation": 0.45,  # hours per linear foot
@@ -342,16 +427,36 @@ class PricingEngine:
 
         # Default prices (would load from file/database in production)
         return {
+            # Base Insulation Materials
             "fiberglass_1.5": 4.50,  # per linear foot for duct
             "fiberglass_2.0": 5.75,
             "elastomeric_0.5": 3.25,  # per linear foot for pipe
             "elastomeric_1.0": 4.50,
+            "cellular_glass_1.0": 6.75,
+            "mineral_wool_1.5": 5.25,
+            
+            # Standard Facings and Jacketing
             "fsk_facing": 1.25,  # per square foot
+            "asj_facing": 1.75,  # per square foot
             "aluminum_jacket": 8.50,  # per square foot
+            "pvc_jacket_20mil": 3.75,  # per square foot
+            "pvc_jacket_30mil": 4.50,  # per square foot
+            "stainless_jacket": 12.50,  # per square foot
+            
+            # Accessories and Sealants
             "mastic": 0.75,  # per square foot
             "stainless_bands": 2.50,  # per band
+            "pvc_fitting_covers": 8.50,  # per piece
             "adhesive": 12.50,  # per gallon
             "vapor_seal": 15.00,  # per gallon
+            "metal_corner_beads": 1.25,  # per linear foot
+            "self_adhering_tape": 0.45,  # per linear foot
+            
+            # Labor Rate Modifiers (multipliers)
+            "standard_labor": 1.0,
+            "premium_labor": 1.25,  # for complex installations
+            "outdoor_labor": 1.15,  # weather conditions
+            "height_labor": 1.20,  # above 12 feet
         }
 
     def calculate_materials(self, measurements: List[MeasurementItem], specs: List[InsulationSpec]) -> List[MaterialItem]:
@@ -409,7 +514,7 @@ class PricingEngine:
 
         # Get price key
         price_key = f"{spec.material}_{spec.thickness}"
-        unit_price = self.prices.get(price_key, 5.0)  # default
+        unit_price = self.prices.get(price_key, 5.0) * self.markup  # apply markup
 
         return MaterialItem(
             description=f"{spec.material.title()} Insulation {spec.thickness}\" - {measurement.size}",
@@ -431,11 +536,11 @@ class PricingEngine:
 
         if "aluminum_jacket" in spec.special_requirements:
             description = f"Aluminum Jacketing - {measurement.size}"
-            unit_price = self.prices["aluminum_jacket"]
+            unit_price = self.prices["aluminum_jacket"] * self.markup
         else:
             facing_description = spec.facing or "Facing"
             description = f"{facing_description} Facing - {measurement.size}"
-            unit_price = self.prices.get("fsk_facing", 1.25)
+            unit_price = self.prices.get("fsk_facing", 1.25) * self.markup
 
         return MaterialItem(
             description=description,
@@ -457,8 +562,8 @@ class PricingEngine:
             description="Mastic Vapor Seal Coating",
             unit="SF",
             quantity=square_feet,
-            unit_price=self.prices["mastic"],
-            total_price=square_feet * self.prices["mastic"],
+            unit_price=self.prices["mastic"] * self.markup,
+            total_price=square_feet * self.prices["mastic"] * self.markup,
             category="mastic",
         )
 
@@ -476,8 +581,8 @@ class PricingEngine:
                     description="Stainless Steel Bands",
                     unit="EA",
                     quantity=band_count,
-                    unit_price=self.prices["stainless_bands"],
-                    total_price=band_count * self.prices["stainless_bands"],
+                    unit_price=self.prices["stainless_bands"] * self.markup,
+                    total_price=band_count * self.prices["stainless_bands"] * self.markup,
                     category="accessories",
                 )
             )
@@ -522,6 +627,81 @@ class PricingEngine:
 
 class QuoteGenerator:
     """Generate formal quotes and material lists."""
+
+    def calculate_alternative_options(
+        self,
+        measurements: List[MeasurementItem],
+        specs: List[InsulationSpec],
+        pricing_engine: PricingEngine,
+    ) -> Dict[str, Dict[str, float]]:
+        """Calculate costs for alternative material options."""
+        alternatives: Dict[str, Dict[str, float]] = {}
+        
+        # Group measurements by system type
+        duct_measurements = [m for m in measurements if m.system_type == "duct"]
+        pipe_measurements = [m for m in measurements if m.system_type == "pipe"]
+        
+        # Calculate PVC jacketing option
+        if pipe_measurements:
+            standard_materials = pricing_engine.calculate_materials(pipe_measurements, specs)
+            standard_cost = sum(m.total_price for m in standard_materials)
+            
+            # Create PVC jacket spec variation
+            pvc_specs = []
+            for spec in specs:
+                if spec.system_type == "pipe":
+                    pvc_spec = InsulationSpec(
+                        system_type=spec.system_type,
+                        size_range=spec.size_range,
+                        thickness=spec.thickness,
+                        material=spec.material,
+                        facing="PVC",
+                        special_requirements=["pvc_jacket_20mil"]
+                    )
+                    pvc_specs.append(pvc_spec)
+                else:
+                    pvc_specs.append(spec)
+            
+            pvc_materials = pricing_engine.calculate_materials(pipe_measurements, pvc_specs)
+            pvc_cost = sum(m.total_price for m in pvc_materials)
+            
+            alternatives["pvc_option"] = {
+                "base_cost": standard_cost,
+                "upgrade_cost": pvc_cost,
+                "difference": pvc_cost - standard_cost
+            }
+        
+        # Calculate premium insulation options
+        if duct_measurements:
+            base_specs = [s for s in specs if s.system_type == "duct"]
+            base_materials = pricing_engine.calculate_materials(duct_measurements, base_specs)
+            base_cost = sum(m.total_price for m in base_materials)
+            
+            # Premium mineral wool option
+            premium_specs = []
+            for spec in specs:
+                if spec.system_type == "duct":
+                    premium_spec = InsulationSpec(
+                        system_type=spec.system_type,
+                        size_range=spec.size_range,
+                        thickness=spec.thickness,
+                        material="mineral_wool",
+                        facing=spec.facing
+                    )
+                    premium_specs.append(premium_spec)
+                else:
+                    premium_specs.append(spec)
+            
+            premium_materials = pricing_engine.calculate_materials(duct_measurements, premium_specs)
+            premium_cost = sum(m.total_price for m in premium_materials)
+            
+            alternatives["premium_insulation"] = {
+                "base_cost": base_cost,
+                "upgrade_cost": premium_cost,
+                "difference": premium_cost - base_cost
+            }
+        
+        return alternatives
 
     def generate_quote(
         self,
@@ -601,20 +781,23 @@ class QuoteGenerator:
         """Generate consolidated material list for distributor."""
 
         # Consolidate by description
-        consolidated: Dict[str, Dict[str, object]] = {}
+        consolidated: Dict[str, Dict[str, float | str]] = {}
 
         for material in materials:
             key = f"{material.description}|{material.unit}"
             if key in consolidated:
-                consolidated[key]["quantity"] = float(consolidated[key]["quantity"]) + material.quantity
-                consolidated[key]["total_price"] = float(consolidated[key]["total_price"]) + material.total_price
+                qty = consolidated[key]["quantity"]
+                price = consolidated[key]["total_price"]
+                if isinstance(qty, (int, float)) and isinstance(price, (int, float)):
+                    consolidated[key]["quantity"] = float(qty) + material.quantity
+                    consolidated[key]["total_price"] = float(price) + material.total_price
             else:
                 consolidated[key] = {
                     "description": material.description,
                     "unit": material.unit,
-                    "quantity": material.quantity,
+                    "quantity": float(material.quantity),
                     "category": material.category,
-                    "total_price": material.total_price,
+                    "total_price": float(material.total_price),
                 }
 
         # Sort by category
@@ -622,13 +805,14 @@ class QuoteGenerator:
 
         return material_list
 
-    def export_quote_to_file(self, quote: ProjectQuote, output_path: str | Path) -> None:
-        """Export quote to formatted text file."""
+    def export_quote_to_file(self, quote: ProjectQuote, output_path: str | Path, alternatives: Optional[Dict[str, Dict[str, float]]] = None) -> None:
+        """Export quote to formatted text file with detailed breakdowns."""
 
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         with output_path.open("w", encoding="utf-8") as f:
+            # Header
             f.write("=" * 80 + "\n")
             f.write("HVAC INSULATION QUOTE\n")
             f.write("=" * 80 + "\n\n")
@@ -649,7 +833,51 @@ class QuoteGenerator:
                     f"${material.total_price:>11.2f}\n"
                 )
 
-            f.write("\n")
+            # System-specific breakdowns
+            f.write("\nSYSTEM BREAKDOWN\n")
+            f.write("-" * 80 + "\n")
+            
+            # Group materials by system and category
+            duct_materials = [m for m in quote.materials if "duct" in m.description.lower()]
+            pipe_materials = [m for m in quote.materials if "pipe" in m.description.lower()]
+            
+            if duct_materials:
+                duct_total = sum(m.total_price for m in duct_materials)
+                f.write("\nDUCTWORK SYSTEM\n")
+                for m in duct_materials:
+                    f.write(f"  {m.description:<46} ${m.total_price:>11.2f}\n")
+                f.write(f"{'Ductwork Subtotal':>50} ${duct_total:>11.2f}\n")
+            
+            if pipe_materials:
+                pipe_total = sum(m.total_price for m in pipe_materials)
+                f.write("\nPIPING SYSTEM\n")
+                for m in pipe_materials:
+                    f.write(f"  {m.description:<46} ${m.total_price:>11.2f}\n")
+                f.write(f"{'Piping Subtotal':>50} ${pipe_total:>11.2f}\n")
+            
+            # Alternative Options Section
+            if alternatives:
+                f.write("\nALTERNATIVE OPTIONS AND UPGRADES\n")
+                f.write("-" * 80 + "\n")
+                
+                if "pvc_option" in alternatives:
+                    f.write("\nPVC JACKETING UPGRADE (PIPING)\n")
+                    pvc = alternatives["pvc_option"]
+                    f.write(f"  Standard Installation Cost: ${pvc['base_cost']:,.2f}\n")
+                    f.write(f"  With PVC Jacketing Cost:   ${pvc['upgrade_cost']:,.2f}\n")
+                    f.write(f"  Upgrade Difference:        ${pvc['difference']:,.2f}\n")
+                
+                if "premium_insulation" in alternatives:
+                    f.write("\nPREMIUM INSULATION UPGRADE (DUCTWORK)\n")
+                    premium = alternatives["premium_insulation"]
+                    f.write(f"  Standard Installation Cost: ${premium['base_cost']:,.2f}\n")
+                    f.write(f"  Premium Installation Cost:  ${premium['upgrade_cost']:,.2f}\n")
+                    f.write(f"  Upgrade Difference:        ${premium['difference']:,.2f}\n")
+            
+            # Totals Section
+            f.write("\n" + "=" * 80 + "\n")
+            f.write("QUOTE SUMMARY\n")
+            f.write("-" * 80 + "\n")
             f.write(f"{'Material Subtotal':>68} ${sum(m.total_price for m in quote.materials):>11.2f}\n")
             f.write(
                 f"{'Labor (' + str(int(quote.labor_hours)) + ' hours @ $' + str(quote.labor_rate) + '/hr)':>68} "
@@ -754,7 +982,10 @@ def main() -> None:
 
     # Step 3: Calculate materials and pricing
     print("\n3. Calculating materials and pricing...")
-    pricing_engine = PricingEngine()
+    # Use sample pricebook and 15% markup for demo
+    pricebook_path = "pricebook_sample.json"
+    markup = 1.15  # 15% markup
+    pricing_engine = PricingEngine(price_book_path=pricebook_path, markup=markup)
     materials = pricing_engine.calculate_materials(measurements, specs)
     labor_hours, labor_cost = pricing_engine.calculate_labor(materials)
 

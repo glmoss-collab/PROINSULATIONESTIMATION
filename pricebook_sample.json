@@ -1,0 +1,21 @@
+{
+    "fiberglass_1.5": 4.10,
+    "fiberglass_2.0": 5.25,
+    "elastomeric_0.5": 2.95,
+    "elastomeric_1.0": 4.10,
+    "cellular_glass_1.0": 6.25,
+    "mineral_wool_1.5": 4.85,
+    "fsk_facing": 1.10,
+    "asj_facing": 1.60,
+    "aluminum_jacket": 8.00,
+    "pvc_jacket_20mil": 3.40,
+    "pvc_jacket_30mil": 4.10,
+    "stainless_jacket": 12.00,
+    "mastic": 0.65,
+    "stainless_bands": 2.20,
+    "pvc_fitting_covers": 7.90,
+    "adhesive": 11.80,
+    "vapor_seal": 14.00,
+    "metal_corner_beads": 1.10,
+    "self_adhering_tape": 0.40
+}
