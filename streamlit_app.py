@@ -6,6 +6,7 @@ Upload specifications, enter measurements, get instant quotes.
 
 import io
 import json
+import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +24,14 @@ from hvac_insulation_estimator import (
     QuoteGenerator,
     SpecificationExtractor,
 )
+
+# Import AI extractor
+try:
+    from gemini_pdf_extractor import GeminiPDFExtractor
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
+    GeminiPDFExtractor = None
 
 # Page configuration
 st.set_page_config(
@@ -86,12 +95,29 @@ def initialize_session_state():
         st.session_state.pricing_engine = None
     if 'distributor_prices' not in st.session_state:
         st.session_state.distributor_prices = None
+    if 'project_info' not in st.session_state:
+        st.session_state.project_info = {"project_name": "", "location": ""}
+    if 'ai_extractor' not in st.session_state:
+        st.session_state.ai_extractor = None
+    if 'gemini_api_key' not in st.session_state:
+        st.session_state.gemini_api_key = None
 
 
 def render_header():
     """Render application header."""
     st.markdown('<div class="main-header">🏗️ HVAC Insulation Estimator</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-header">Professional Mechanical Insulation Estimation Tool</div>', unsafe_allow_html=True)
+
+    # Show project info if available
+    if st.session_state.project_info.get('project_name'):
+        project_name = st.session_state.project_info['project_name']
+        location = st.session_state.project_info.get('location', '')
+        if location and location != "Not specified":
+            st.markdown(f'<div class="sub-header">Project: {project_name} | {location}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="sub-header">Project: {project_name}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="sub-header">Professional Mechanical Insulation Estimation Tool</div>', unsafe_allow_html=True)
+
     st.markdown("---")
 
 
@@ -99,6 +125,41 @@ def render_sidebar():
     """Render sidebar with configuration options."""
     with st.sidebar:
         st.header("⚙️ Configuration")
+
+        # AI API Key Configuration
+        st.subheader("🤖 AI Extraction")
+
+        if AI_AVAILABLE:
+            # Check for API key in secrets first (for Streamlit Cloud)
+            default_key = ""
+            try:
+                default_key = st.secrets.get("GEMINI_API_KEY", "")
+            except:
+                default_key = os.getenv("GEMINI_API_KEY", "")
+
+            api_key = st.text_input(
+                "Google Gemini API Key",
+                value=default_key,
+                type="password",
+                help="Get your free API key at: https://aistudio.google.com/app/apikey"
+            )
+
+            if api_key:
+                st.session_state.gemini_api_key = api_key
+                if st.session_state.ai_extractor is None:
+                    try:
+                        st.session_state.ai_extractor = GeminiPDFExtractor(api_key=api_key)
+                        st.success("✓ AI Ready")
+                    except Exception as e:
+                        st.error(f"Error initializing AI: {str(e)}")
+            else:
+                st.warning("⚠️ Enter API key to enable AI extraction")
+                st.markdown("[Get free API key](https://aistudio.google.com/app/apikey)")
+
+        else:
+            st.warning("⚠️ AI features require: `pip install google-generativeai pillow`")
+
+        st.markdown("---")
 
         # Distributor pricing upload
         st.subheader("Distributor Pricing")
@@ -247,26 +308,103 @@ def render_spec_input():
             st.rerun()
 
     with tab2:
-        st.info("PDF specification extraction requires pdfplumber. Upload PDFs to auto-extract insulation specs.")
-        uploaded_pdf = st.file_uploader(
+        if st.session_state.ai_extractor:
+            st.success("🤖 AI-Powered Extraction Ready")
+            st.info("Upload your project specification PDF. AI will automatically extract ALL insulation specifications.")
+        else:
+            st.warning("⚠️ Enter your Gemini API key in the sidebar to enable AI extraction")
+
+        uploaded_spec_pdf = st.file_uploader(
             "Upload Specification PDF",
             type=['pdf'],
-            key="spec_pdf"
+            key="spec_pdf",
+            help="Upload project specifications (mechanical, insulation specs, etc.)"
         )
 
-        if uploaded_pdf and st.button("Extract Specifications"):
-            try:
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
-                    tmp.write(uploaded_pdf.getvalue())
-                    tmp_path = tmp.name
+        # Also allow drawing PDF upload here for complete project extraction
+        uploaded_drawing_pdf = st.file_uploader(
+            "Upload Drawing PDF (Optional)",
+            type=['pdf'],
+            key="drawing_pdf_specs",
+            help="Upload mechanical drawings to extract measurements automatically"
+        )
 
-                extractor = SpecificationExtractor()
-                extracted_specs = extractor.extract_from_pdf(tmp_path)
-                st.session_state.specs.extend(extracted_specs)
-                st.success(f"✓ Extracted {len(extracted_specs)} specifications from PDF")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error extracting specifications: {str(e)}")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if uploaded_spec_pdf and st.button("🤖 AI Extract Specs & Measurements", type="primary", use_container_width=True):
+                if not st.session_state.ai_extractor:
+                    st.error("❌ Please enter your Gemini API key in the sidebar first")
+                else:
+                    try:
+                        # Save PDFs to temp files
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_spec:
+                            tmp_spec.write(uploaded_spec_pdf.getvalue())
+                            spec_path = tmp_spec.name
+
+                        drawing_path = None
+                        if uploaded_drawing_pdf:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_draw:
+                                tmp_draw.write(uploaded_drawing_pdf.getvalue())
+                                drawing_path = tmp_draw.name
+
+                        # Run AI extraction
+                        with st.spinner("🤖 AI is analyzing your PDFs... This may take 30-60 seconds..."):
+                            result = st.session_state.ai_extractor.process_complete_project(
+                                spec_pdf_path=spec_path,
+                                drawing_pdf_path=drawing_path
+                            )
+
+                        # Extract project info
+                        if result.get('project_info'):
+                            st.session_state.project_info = result['project_info']
+                            st.success(f"✓ Project: {result['project_info'].get('project_name', 'Unknown')}")
+
+                        # Extract specifications
+                        if result.get('specifications'):
+                            for spec_dict in result['specifications']:
+                                spec = InsulationSpec(
+                                    system_type=spec_dict.get('system_type', 'duct'),
+                                    size_range=spec_dict.get('size_range', 'all'),
+                                    thickness=float(spec_dict.get('thickness', 1.5)),
+                                    material=spec_dict.get('material', 'fiberglass'),
+                                    facing=spec_dict.get('facing'),
+                                    location=spec_dict.get('location', 'indoor'),
+                                    special_requirements=spec_dict.get('special_requirements', [])
+                                )
+                                st.session_state.specs.append(spec)
+                            st.success(f"✓ Extracted {len(result['specifications'])} specifications")
+
+                        # Extract measurements (if drawing PDF provided)
+                        if result.get('measurements'):
+                            extractor = DrawingMeasurementExtractor()
+                            measurements = extractor.manual_entry_measurements(result['measurements'])
+                            st.session_state.measurements.extend(measurements)
+                            st.success(f"✓ Extracted {len(result['measurements'])} measurements from drawings")
+
+                        if not result.get('specifications') and not result.get('measurements'):
+                            st.warning("⚠️ No specifications or measurements found. Please check your PDF or try manual entry.")
+
+                        st.rerun()
+
+                    except Exception as e:
+                        st.error(f"❌ Error during AI extraction: {str(e)}")
+                        st.info("💡 Tip: Make sure your PDF contains clear specification tables or text")
+
+        with col2:
+            if uploaded_spec_pdf and st.button("📄 Basic Text Extract", use_container_width=True):
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+                        tmp.write(uploaded_spec_pdf.getvalue())
+                        tmp_path = tmp.name
+
+                    extractor = SpecificationExtractor()
+                    extracted_specs = extractor.extract_from_pdf(tmp_path)
+                    st.session_state.specs.extend(extracted_specs)
+                    st.success(f"✓ Extracted {len(extracted_specs)} specifications")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
 
     # Display current specs
     if st.session_state.specs:
