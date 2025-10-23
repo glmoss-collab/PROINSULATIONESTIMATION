@@ -1,0 +1,15 @@
+# Core dependencies for HVAC Insulation Estimator SaaS
+streamlit>=1.30.0
+pandas>=2.0.0
+numpy>=1.24.0
+
+# PDF processing (optional but recommended)
+pdfplumber>=0.10.0
+opencv-python-headless>=4.8.0
+
+# Excel file support
+openpyxl>=3.1.0
+
+# For future enhancements
+plotly>=5.18.0  # Interactive charts
+altair>=5.2.0   # Declarative visualizations
