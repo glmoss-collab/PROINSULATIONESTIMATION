@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  streamlit:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      # Mount local files for development (hot reload)
+      - ./streamlit_app.py:/app/streamlit_app.py
+      - ./hvac_insulation_estimator.py:/app/hvac_insulation_estimator.py
+      - ./pricebook_sample.json:/app/pricebook_sample.json
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_ADDRESS=0.0.0.0
+    restart: unless-stopped
