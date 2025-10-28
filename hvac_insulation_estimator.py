@@ -13,6 +13,7 @@ This framework provides:
 
 from __future__ import annotations
 
+import csv
 import json
 import re
 from dataclasses import dataclass, field
@@ -50,7 +51,11 @@ except Exception:
 
     np = _MinimalNumpy()
 
-import pdfplumber
+# Dynamically import pdfplumber if available
+try:
+    pdfplumber = importlib.import_module("pdfplumber")
+except Exception:
+    pdfplumber = None
 
 
 @dataclass
@@ -118,6 +123,9 @@ class SpecificationExtractor:
 
     def extract_from_pdf(self, pdf_path: str) -> List[InsulationSpec]:
         """Extract insulation specifications from PDF."""
+
+        if pdfplumber is None:
+            raise ImportError("pdfplumber is required for PDF extraction. Install with: pip install pdfplumber")
 
         specs: List[InsulationSpec] = []
 
@@ -255,6 +263,9 @@ class DrawingMeasurementExtractor:
 
     def extract_scale_from_pdf(self, pdf_path: str) -> Optional[float]:
         """Automatically detect scale from drawing."""
+
+        if pdfplumber is None:
+            raise ImportError("pdfplumber is required for PDF extraction. Install with: pip install pdfplumber")
 
         with pdfplumber.open(pdf_path) as pdf:
             first_page = pdf.pages[0]
@@ -406,11 +417,24 @@ class DrawingMeasurementExtractor:
 
 
 class PricingEngine:
-    """Calculate material quantities and pricing."""
+    """Calculate material quantities and pricing with distributor support."""
 
-    def __init__(self, price_book_path: Optional[str] = None, markup: float = 1.0) -> None:
+    def __init__(self, price_book_path: Optional[str] = None, markup: float = 1.0,
+                 distributor_name: Optional[str] = None) -> None:
+        """
+        Initialize pricing engine with distributor pricebook.
+
+        Args:
+            price_book_path: Path to distributor pricebook (JSON, CSV, or Excel)
+            markup: Markup multiplier (e.g., 1.15 = 15% markup)
+            distributor_name: Name of distributor for reporting
+        """
         self.markup = markup
+        self.distributor_name = distributor_name or "Default"
+        self.pricebook_path = price_book_path
+        self.pricebook_loaded_at = datetime.now()
         self.prices = self._load_prices(price_book_path)
+        self.missing_prices: List[str] = []  # Track items with missing prices
         self.labor_rates = {
             "duct_insulation": 0.45,  # hours per linear foot
             "pipe_insulation": 0.35,
@@ -419,11 +443,129 @@ class PricingEngine:
         }
 
     def _load_prices(self, price_book_path: Optional[str]) -> Dict[str, float]:
-        """Load current market prices."""
+        """
+        Load distributor prices from file.
 
+        Supports JSON, CSV, and Excel formats.
+        CSV/Excel should have columns: 'item' (or 'material', 'description') and 'price' (or 'cost', 'unit_price')
+        """
         if price_book_path:
-            with open(price_book_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+            path = Path(price_book_path)
+
+            if not path.exists():
+                print(f"Warning: Pricebook file not found at {price_book_path}. Using default prices.")
+                return self._get_default_prices()
+
+            # Load based on file extension
+            if path.suffix.lower() == '.json':
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        prices = json.load(f)
+                        print(f"Loaded {len(prices)} prices from distributor pricebook: {path.name}")
+                        return prices
+                except Exception as e:
+                    print(f"Error loading JSON pricebook: {e}. Using default prices.")
+                    return self._get_default_prices()
+
+            elif path.suffix.lower() == '.csv':
+                return self._load_csv_prices(path)
+
+            elif path.suffix.lower() in ['.xlsx', '.xls']:
+                return self._load_excel_prices(path)
+
+            else:
+                print(f"Warning: Unsupported file format '{path.suffix}'. Using default prices.")
+                return self._get_default_prices()
+
+        # No price book provided, use defaults
+        return self._get_default_prices()
+
+    def _load_csv_prices(self, path: Path) -> Dict[str, float]:
+        """Load prices from CSV file."""
+        try:
+            prices = {}
+            with open(path, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+
+                # Detect column names (flexible matching)
+                item_col = None
+                price_col = None
+
+                for fieldname in reader.fieldnames or []:
+                    lower_field = fieldname.lower()
+                    if 'item' in lower_field or 'material' in lower_field or 'description' in lower_field:
+                        item_col = fieldname
+                    if 'price' in lower_field or 'cost' in lower_field or 'unit' in lower_field:
+                        price_col = fieldname
+
+                if not item_col or not price_col:
+                    print(f"Warning: Could not find item/price columns in CSV. Using default prices.")
+                    return self._get_default_prices()
+
+                for row in reader:
+                    item_key = row[item_col].strip().lower().replace(' ', '_')
+                    try:
+                        price = float(row[price_col].strip().replace('$', '').replace(',', ''))
+                        prices[item_key] = price
+                    except ValueError:
+                        continue
+
+                print(f"Loaded {len(prices)} prices from CSV pricebook: {path.name}")
+                return prices if prices else self._get_default_prices()
+
+        except Exception as e:
+            print(f"Error loading CSV pricebook: {e}. Using default prices.")
+            return self._get_default_prices()
+
+    def _load_excel_prices(self, path: Path) -> Dict[str, float]:
+        """Load prices from Excel file."""
+        try:
+            # Try importing openpyxl or xlrd
+            try:
+                import openpyxl
+                wb = openpyxl.load_workbook(path, data_only=True)
+                sheet = wb.active
+
+                prices = {}
+                headers = [cell.value for cell in sheet[1]]
+
+                # Find item and price columns
+                item_col_idx = None
+                price_col_idx = None
+
+                for idx, header in enumerate(headers):
+                    if header:
+                        lower_header = str(header).lower()
+                        if 'item' in lower_header or 'material' in lower_header or 'description' in lower_header:
+                            item_col_idx = idx
+                        if 'price' in lower_header or 'cost' in lower_header or 'unit' in lower_header:
+                            price_col_idx = idx
+
+                if item_col_idx is None or price_col_idx is None:
+                    print(f"Warning: Could not find item/price columns in Excel. Using default prices.")
+                    return self._get_default_prices()
+
+                for row in sheet.iter_rows(min_row=2, values_only=True):
+                    item_key = str(row[item_col_idx]).strip().lower().replace(' ', '_')
+                    try:
+                        price = float(str(row[price_col_idx]).replace('$', '').replace(',', ''))
+                        prices[item_key] = price
+                    except (ValueError, AttributeError):
+                        continue
+
+                print(f"Loaded {len(prices)} prices from Excel pricebook: {path.name}")
+                return prices if prices else self._get_default_prices()
+
+            except ImportError:
+                print("Warning: openpyxl not installed. Cannot load Excel files. Using default prices.")
+                return self._get_default_prices()
+
+        except Exception as e:
+            print(f"Error loading Excel pricebook: {e}. Using default prices.")
+            return self._get_default_prices()
+
+    def _get_default_prices(self) -> Dict[str, float]:
+        """Get default fallback prices."""
 
         # Default prices (would load from file/database in production)
         return {
@@ -499,7 +641,7 @@ class PricingEngine:
         return None
 
     def _calculate_insulation(self, measurement: MeasurementItem, spec: InsulationSpec) -> MaterialItem:
-        """Calculate insulation material quantity and cost."""
+        """Calculate insulation material quantity and cost with distributor pricing."""
 
         # Linear feet of insulation
         quantity = measurement.length
@@ -512,9 +654,25 @@ class PricingEngine:
 
         adjusted_quantity = quantity * fitting_multiplier
 
-        # Get price key
+        # Get price from distributor pricebook
         price_key = f"{spec.material}_{spec.thickness}"
-        unit_price = self.prices.get(price_key, 5.0) * self.markup  # apply markup
+
+        # Try exact match first
+        if price_key in self.prices:
+            base_price = self.prices[price_key]
+        else:
+            # Try alternative key formats
+            alt_key = f"{spec.material}_{int(spec.thickness)}"
+            if alt_key in self.prices:
+                base_price = self.prices[alt_key]
+            else:
+                # Track missing price and use fallback
+                if price_key not in self.missing_prices:
+                    self.missing_prices.append(price_key)
+                    print(f"Warning: No distributor price found for '{price_key}'. Using fallback price.")
+                base_price = 5.0  # fallback
+
+        unit_price = base_price * self.markup  # apply markup
 
         return MaterialItem(
             description=f"{spec.material.title()} Insulation {spec.thickness}\" - {measurement.size}",
@@ -623,6 +781,88 @@ class PricingEngine:
 
         labor_rate = 65.0
         return total_hours, total_hours * labor_rate
+
+    def get_distributor_info(self) -> Dict[str, Any]:
+        """Get information about the loaded distributor pricebook."""
+        return {
+            "distributor_name": self.distributor_name,
+            "pricebook_path": str(self.pricebook_path) if self.pricebook_path else "Default (hardcoded)",
+            "loaded_at": self.pricebook_loaded_at.isoformat(),
+            "total_items": len(self.prices),
+            "markup": self.markup,
+            "markup_percentage": f"{(self.markup - 1.0) * 100:.1f}%",
+            "missing_prices": self.missing_prices,
+        }
+
+    def get_pricing_summary(self, materials: List[MaterialItem]) -> Dict[str, Any]:
+        """Generate a pricing summary report with distributor information."""
+
+        # Calculate totals by category
+        category_totals = {}
+        for material in materials:
+            if material.category not in category_totals:
+                category_totals[material.category] = 0.0
+            category_totals[material.category] += material.total_price
+
+        materials_subtotal = sum(category_totals.values())
+
+        # Calculate labor
+        labor_hours, labor_cost = self.calculate_labor(materials)
+
+        # Calculate total
+        subtotal = materials_subtotal + labor_cost
+        contingency = subtotal * 0.10  # 10% contingency
+        total = subtotal + contingency
+
+        return {
+            "distributor_info": self.get_distributor_info(),
+            "materials_by_category": category_totals,
+            "materials_subtotal": materials_subtotal,
+            "labor_hours": labor_hours,
+            "labor_cost": labor_cost,
+            "subtotal": subtotal,
+            "contingency": contingency,
+            "contingency_percentage": "10%",
+            "total": total,
+            "items_without_distributor_pricing": len(self.missing_prices),
+            "missing_items": self.missing_prices if self.missing_prices else None,
+        }
+
+    def print_pricing_report(self, materials: List[MaterialItem]) -> None:
+        """Print a detailed pricing report with distributor information."""
+        summary = self.get_pricing_summary(materials)
+        dist_info = summary["distributor_info"]
+
+        print("\n" + "="*60)
+        print("DISTRIBUTOR PRICING REPORT")
+        print("="*60)
+        print(f"Distributor: {dist_info['distributor_name']}")
+        print(f"Pricebook: {dist_info['pricebook_path']}")
+        print(f"Loaded: {dist_info['loaded_at']}")
+        print(f"Total Items in Pricebook: {dist_info['total_items']}")
+        print(f"Markup Applied: {dist_info['markup_percentage']}")
+        print()
+
+        if dist_info['missing_prices']:
+            print("WARNING: The following items were not found in distributor pricebook:")
+            for item in dist_info['missing_prices']:
+                print(f"  - {item}")
+            print()
+
+        print("COST BREAKDOWN BY CATEGORY")
+        print("-"*60)
+        for category, amount in summary["materials_by_category"].items():
+            print(f"{category.title():20s} ${amount:>12,.2f}")
+
+        print("-"*60)
+        print(f"{'Materials Subtotal':20s} ${summary['materials_subtotal']:>12,.2f}")
+        print(f"{'Labor Hours':20s} {summary['labor_hours']:>12.1f}")
+        print(f"{'Labor Cost':20s} ${summary['labor_cost']:>12,.2f}")
+        print(f"{'Subtotal':20s} ${summary['subtotal']:>12,.2f}")
+        print(f"{'Contingency (10%)':20s} ${summary['contingency']:>12,.2f}")
+        print("="*60)
+        print(f"{'TOTAL ESTIMATE':20s} ${summary['total']:>12,.2f}")
+        print("="*60)
 
 
 class QuoteGenerator:
@@ -980,17 +1220,24 @@ def main() -> None:
     measurements = drawing_extractor.manual_entry_measurements(manual_measurements)
     print(f"   Processed {len(measurements)} measurement items")
 
-    # Step 3: Calculate materials and pricing
+    # Step 3: Calculate materials and pricing with distributor pricing
     print("\n3. Calculating materials and pricing...")
     # Use sample pricebook and 15% markup for demo
     pricebook_path = "pricebook_sample.json"
     markup = 1.15  # 15% markup
-    pricing_engine = PricingEngine(price_book_path=pricebook_path, markup=markup)
+    pricing_engine = PricingEngine(
+        price_book_path=pricebook_path,
+        markup=markup,
+        distributor_name="Sample Distributor"
+    )
     materials = pricing_engine.calculate_materials(measurements, specs)
     labor_hours, labor_cost = pricing_engine.calculate_labor(materials)
 
     print(f"   Material items: {len(materials)}")
     print(f"   Labor hours: {labor_hours:.1f}")
+
+    # Display distributor pricing report
+    pricing_engine.print_pricing_report(materials)
 
     # Step 4: Generate quote
     print("\n4. Generating formal quote...")
