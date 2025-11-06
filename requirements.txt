@@ -3,9 +3,14 @@ streamlit>=1.30.0
 pandas>=2.0.0
 numpy>=1.24.0
 
-# AI-powered PDF extraction
+# AI-powered estimation with Claude Agents SDK
+anthropic>=0.40.0
+python-dotenv>=1.0.0
+
+# AI-powered PDF extraction (legacy support)
 google-generativeai>=0.8.0
 pillow>=10.0.0
+pdf2image>=1.16.0
 
 # PDF processing
 pdfplumber>=0.10.0
