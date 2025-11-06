@@ -139,8 +139,17 @@ python demo_agent.py --demo 1
 
 ## 📚 Documentation
 
-- **[Agent Setup Guide](AGENT_SETUP_GUIDE.md)** - Getting started with Claude Agents
+### 🚀 Getting Started (New Users Start Here!)
+
+1. **[Quick Start Checklist](QUICK_START_CHECKLIST.md)** ⭐ - 30-minute setup guide (print & follow!)
+2. **[User Manual](USER_MANUAL.md)** ⭐ - Complete beginner-friendly guide
+3. **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Hosting options (Cloud, Docker, etc.)
+
+### 🔧 Technical Documentation
+
+- **[Agent Setup Guide](AGENT_SETUP_GUIDE.md)** - Getting started with Claude Agents SDK
 - **[Agent Architecture](CLAUDE_AGENTS_ARCHITECTURE.md)** - System design and workflows
+- **[Production Enhancements](PRODUCTION_ENHANCEMENTS.md)** - Performance & cost optimizations
 - **[Streamlit App Guide](STREAMLIT_README.md)** - Full-featured app documentation
 - **[AI Setup Guide](AI_SETUP_GUIDE.md)** - Google Gemini integration
 
