@@ -97,6 +97,17 @@ The latest version integrates **Anthropic's Claude Agents SDK** for intelligent,
    - Error recovery and retry logic
    - Automatic validation
 
+### 🌟 NEW: Agent Skills Framework
+
+**High-level, composable capabilities for professional estimation:**
+
+- **Intelligent Document Processor**: Auto-detects document types, smart page selection (85% cost savings)
+- **Specification Intelligence Engine**: Validates specs, recommends alternatives, checks compliance
+- **Smart Quote Optimizer**: Multiple optimization scenarios, 15-35% cost savings, risk analysis
+- **Project Intelligence Analyzer**: Complexity scoring, timeline estimation, strategic recommendations
+
+[📖 Agent Skills Guide](AGENT_SKILLS_GUIDE.md) | [🎯 Skills Demo](demo_skills.py)
+
 ### Example Usage
 
 ```python
