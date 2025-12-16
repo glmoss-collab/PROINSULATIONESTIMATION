@@ -3,6 +3,10 @@ streamlit>=1.30.0
 pandas>=2.0.0
 numpy>=1.24.0
 
+# FastAPI server for enterprise API layer
+fastapi>=0.100.0
+uvicorn>=0.23.0
+
 # AI-powered estimation with Claude Agents SDK
 anthropic>=0.40.0
 python-dotenv>=1.0.0

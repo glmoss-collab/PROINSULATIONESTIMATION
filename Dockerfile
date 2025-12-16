@@ -18,17 +18,21 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
-COPY streamlit_app.py .
+COPY main.py .
 COPY hvac_insulation_estimator.py .
+COPY pydantic_models.py .
 COPY pricebook_sample.json .
 COPY measurements_template.csv .
-COPY .streamlit/ .streamlit/
 
-# Expose Streamlit port
-EXPOSE 8501
+# Optional: Copy Streamlit files for dual deployment
+# COPY streamlit_app.py .
+# COPY .streamlit/ .streamlit/
 
-# Health check
-HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
+# Expose Cloud Run port (default 8080)
+EXPOSE 8080
 
-# Run Streamlit
-ENTRYPOINT ["streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Health check for Cloud Run
+HEALTHCHECK CMD curl --fail http://localhost:8080/health
+
+# Run FastAPI with uvicorn
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
