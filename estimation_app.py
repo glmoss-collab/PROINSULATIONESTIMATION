@@ -15,7 +15,7 @@ except Exception:  # pragma: no cover - handle missing library gracefully
     Anthropic = None  # type: ignore[assignment]
 
 
-ANTHROPIC_MODEL = "claude-3-5-sonnet-20241022"
+ANTHROPIC_MODEL = "claude-opus-4-5-20251101"
 SYSTEM_INSTRUCTIONS = (
     "You are an HVAC mechanical insulation estimating assistant. "
     "Provide detailed, professional, and well-structured responses tailored to "
@@ -287,7 +287,7 @@ def main() -> None:
         - Calculates materials & labor
         - Generates professional quotes
 
-        **Powered by Claude 3.5 Sonnet**
+        **Powered by Claude Opus 4.5**
         """
         )
 

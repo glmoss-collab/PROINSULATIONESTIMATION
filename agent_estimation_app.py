@@ -151,7 +151,7 @@ def main():
 
     # Title and header
     st.title("🤖 AI-Powered Insulation Estimation Agent")
-    st.caption("Powered by Claude 3.5 Sonnet with Agents SDK")
+    st.caption("Powered by Claude Opus 4.5 with Agents SDK")
 
     # Check initialization
     if not st.session_state.agent_initialized:

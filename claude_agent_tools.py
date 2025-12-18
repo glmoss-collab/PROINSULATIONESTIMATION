@@ -205,7 +205,7 @@ def extract_project_info(pdf_path: str) -> Dict[str, Any]:
         })
 
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-opus-4-5-20251101",
             max_tokens=2048,
             messages=[{
                 "role": "user",
@@ -354,7 +354,7 @@ def extract_specifications(pdf_path: str, pages: Optional[List[int]] = None) -> 
             ]
 
             response = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-opus-4-5-20251101",
                 max_tokens=3096,
                 messages=[{
                     "role": "user",
@@ -538,7 +538,7 @@ def extract_measurements(pdf_path: str, scale: Optional[str] = None) -> Dict[str
             ]
 
             response = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-opus-4-5-20251101",
                 max_tokens=4096,
                 messages=[{
                     "role": "user",
