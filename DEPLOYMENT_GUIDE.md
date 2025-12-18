@@ -275,7 +275,7 @@ Google's platform for deploying and using AI models, including Claude (via partn
 1. **Go to Model Garden:**
    - Console → Vertex AI → Model Garden
    - Search "Claude"
-   - Select "Claude 3.5 Sonnet"
+   - Select "Claude Opus 4.5" (claude-opus-4-5-20251101)
 
 2. **Enable access:**
    - Click "Enable"
@@ -284,7 +284,7 @@ Google's platform for deploying and using AI models, including Claude (via partn
 
 3. **Get endpoint:**
    - Note your endpoint URL
-   - Format: `https://REGION-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/REGION/publishers/anthropic/models/claude-3-5-sonnet`
+   - Format: `https://REGION-aiplatform.googleapis.com/v1/projects/PROJECT_ID/locations/REGION/publishers/anthropic/models/claude-opus-4-5-20251101`
 
 #### Step 3: Configure Authentication
 
@@ -312,36 +312,56 @@ Google's platform for deploying and using AI models, including Claude (via partn
    export GOOGLE_APPLICATION_CREDENTIALS="path/to/key.json"
    ```
 
-#### Step 4: Modify App for Vertex AI
+#### Step 4: Use the Vertex AI Client Module
 
-**Update `claude_estimation_agent.py`:**
+The codebase includes a dedicated `vertex_ai_client.py` module for Vertex AI integration.
+
+**Option A: Using the factory function (recommended)**
 
 ```python
-# Add Vertex AI support
-from google.auth import default
-from google.auth.transport.requests import Request
-import google.auth
+# In any file that needs Claude access:
+from vertex_ai_client import get_claude_client
 
-class VertexAIClient:
-    """Wrapper for Claude via Vertex AI"""
+# Automatically selects Vertex AI or direct API based on environment
+client = get_claude_client()
 
-    def __init__(self, project_id, location="us-central1"):
-        self.project_id = project_id
-        self.location = location
-        self.credentials, _ = default()
+# Use exactly like the standard Anthropic client
+response = client.messages.create(
+    model="claude-opus-4-5-20251101",
+    max_tokens=4096,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
 
-    def messages_create(self, **kwargs):
-        # Implementation to call Vertex AI endpoint
-        # Similar to Anthropic client but uses GCP auth
-        pass
+**Option B: Explicit Vertex AI usage**
 
-# In agent initialization:
-if os.getenv("USE_VERTEX_AI"):
-    client = VertexAIClient(
-        project_id=os.getenv("GCP_PROJECT_ID")
-    )
-else:
-    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+```python
+from vertex_ai_client import VertexAIClaudeClient
+
+# Create Vertex AI client directly
+client = VertexAIClaudeClient(
+    project_id="your-project-id",
+    region="us-central1"  # or us-east4, europe-west1, asia-northeast1
+)
+
+response = client.messages.create(
+    model="claude-opus-4-5-20251101",
+    max_tokens=4096,
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+**Option C: Update existing agent code**
+
+```python
+# In claude_estimation_agent.py or similar:
+import os
+from vertex_ai_client import get_claude_client
+
+# Replace direct Anthropic client initialization:
+# OLD: self.client = Anthropic(api_key=self.api_key)
+# NEW:
+self.client = get_claude_client(api_key=self.api_key)
 ```
 
 #### Step 5: Deploy to Cloud Run
@@ -403,10 +423,11 @@ else:
 
 ### Vertex AI Pricing
 
-**Claude 3.5 Sonnet on Vertex AI:**
-- Input: ~$3.00 per million tokens
-- Output: ~$15.00 per million tokens
+**Claude Opus 4.5 on Vertex AI (claude-opus-4-5-20251101):**
+- Input: ~$15.00 per million tokens
+- Output: ~$75.00 per million tokens
 - **Same as direct Anthropic pricing**
+- **Benefits:** GCP billing, enterprise support, VPC integration
 
 **Cloud Run:**
 - First 2 million requests free/month

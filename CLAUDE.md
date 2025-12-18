@@ -19,7 +19,7 @@
 
 **Project Name:** Professional Insulation Estimation System
 **Primary Purpose:** AI-powered HVAC insulation estimation with multiple interfaces and intelligent agents
-**Primary AI Model:** Claude 3.5 Sonnet (via Anthropic Agents SDK)
+**Primary AI Model:** Claude Opus 4.5 (via Anthropic Agents SDK and Vertex AI Model Garden)
 **Secondary AI:** Google Gemini (legacy support for PDF extraction)
 
 ### What This System Does

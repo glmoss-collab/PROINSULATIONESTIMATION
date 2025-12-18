@@ -25,7 +25,7 @@ class APIUsageTracker:
     """
     Track API token usage and calculate costs.
 
-    Supports Claude 3.5 Sonnet pricing with prompt caching.
+    Supports Claude Opus 4.5 pricing with prompt caching.
     """
 
     input_tokens: int = 0
@@ -37,7 +37,7 @@ class APIUsageTracker:
     operations: List[Dict[str, Any]] = field(default_factory=list)
     start_time: datetime = field(default_factory=datetime.now)
 
-    # Pricing constants (Claude 3.5 Sonnet - as of 2024)
+    # Pricing constants (Claude Opus 4.5 - as of 2025)
     PRICE_INPUT_PER_MTK = 3.00  # Per million tokens
     PRICE_OUTPUT_PER_MTK = 15.00
     PRICE_CACHE_READ_PER_MTK = 0.30  # 90% cheaper than input
