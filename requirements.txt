@@ -1,36 +1,82 @@
-# Core dependencies for HVAC Insulation Estimator SaaS
+# =============================================================================
+# Professional Insulation Estimation System - Dependencies
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Core Web Framework
+# -----------------------------------------------------------------------------
 streamlit>=1.30.0
 pandas>=2.0.0
 numpy>=1.24.0
 
-# AI-powered estimation with Claude Agents SDK
+# -----------------------------------------------------------------------------
+# AI/ML - Claude Agents SDK (Primary)
+# -----------------------------------------------------------------------------
 anthropic>=0.40.0
 python-dotenv>=1.0.0
 
-# AI-powered PDF extraction (legacy support)
+# -----------------------------------------------------------------------------
+# AI/ML - Google Gemini (Legacy Support / Vertex AI)
+# -----------------------------------------------------------------------------
 google-generativeai>=0.8.0
 pillow>=10.0.0
 pdf2image>=1.16.0
 
-# PDF processing (optimized)
+# -----------------------------------------------------------------------------
+# PDF Processing (Optimized)
+# -----------------------------------------------------------------------------
 pdfplumber>=0.10.0
 opencv-python-headless>=4.8.0
 pymupdf>=1.23.0  # Fast PDF rendering and text extraction
 
-# Data validation
+# -----------------------------------------------------------------------------
+# Data Validation
+# -----------------------------------------------------------------------------
 pydantic>=2.0.0
 
-# Excel file support
+# -----------------------------------------------------------------------------
+# Excel File Support
+# -----------------------------------------------------------------------------
 openpyxl>=3.1.0
 
+# -----------------------------------------------------------------------------
+# Performance and Async
+# -----------------------------------------------------------------------------
+aiofiles>=23.0.0  # Async file operations
+
+# -----------------------------------------------------------------------------
+# Visualization
+# -----------------------------------------------------------------------------
+plotly>=5.18.0  # Interactive charts
+altair>=5.2.0   # Declarative visualizations
+
+# -----------------------------------------------------------------------------
+# Google Cloud Platform (GCP) Integration
+# -----------------------------------------------------------------------------
+# Cloud Storage - for PDF uploads and file management
+google-cloud-storage>=2.10.0
+
+# Firestore - for distributed caching
+google-cloud-firestore>=2.11.0
+
+# Secret Manager - for secure API key storage
+google-cloud-secret-manager>=2.16.0
+
+# Cloud Logging - for structured logging in GCP
+google-cloud-logging>=3.5.0
+
+# Cloud Monitoring - for metrics and dashboards (optional)
+# google-cloud-monitoring>=2.15.0
+
+# -----------------------------------------------------------------------------
+# Optional: Redis for High-Performance Caching
+# -----------------------------------------------------------------------------
+# Uncomment if using Google Memorystore (Redis)
+# redis>=4.5.0
+
+# -----------------------------------------------------------------------------
 # Testing
+# -----------------------------------------------------------------------------
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
 pytest-cov>=4.1.0
-
-# Performance and async
-aiofiles>=23.0.0  # Async file operations
-
-# For future enhancements
-plotly>=5.18.0  # Interactive charts
-altair>=5.2.0   # Declarative visualizations
