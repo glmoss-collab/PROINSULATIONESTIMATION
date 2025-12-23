@@ -2,7 +2,6 @@
 
 
 import React, { useState, useCallback, useMemo, useRef } from 'react';
-import { v4 as uuidv4 } from 'uuid';
 import {
   Step,
   ProjectInfo,
@@ -15,8 +14,6 @@ import {
   DuctworkSpecItem,
   PipingSpecItem
 } from './types';
-import { analyzeSpecification, analyzeDrawings } from './services/geminiService';
-import { generateDemoQuote, generateQuoteFromUI } from './estimator';
 import {
   DUCT_PRICING,
   PIPE_PRICING,
@@ -27,6 +24,12 @@ import {
   ACCESSORY_COVERAGE,
   TYPICAL_PROJECT_STANDARDS
 } from './constants';
+
+const newId = (): string => {
+  // `crypto.randomUUID()` is widely supported in modern browsers; fallback avoids a heavy `uuid` dependency.
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `id_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
+};
 
 
 // --- HELPER & UI COMPONENTS (Defined within App.tsx to keep file count low) ---
@@ -168,11 +171,11 @@ export default function App() {
   const [isDrawingLoading, setIsDrawingLoading] = useState(false);
 
   const [ductworkTakeoff, setDuctworkTakeoff] = useState<TakeoffItem[]>([
-    { id: uuidv4(), size: '24x20', length: 180, fittings: 4 },
-    { id: uuidv4(), size: '18x14', length: 225, fittings: 6 },
+    { id: newId(), size: '24x20', length: 180, fittings: 4 },
+    { id: newId(), size: '18x14', length: 225, fittings: 6 },
   ]);
   const [pipingTakeoff, setPipingTakeoff] = useState<TakeoffItem[]>([
-    { id: uuidv4(), size: '2" CHW', length: 240, fittings: 12 },
+    { id: newId(), size: '2" CHW', length: 240, fittings: 12 },
   ]);
 
   const [pricing, setPricing] = useState<PricingSettings>({
@@ -197,6 +200,7 @@ export default function App() {
     setIsSpecLoading(true);
     setError(null);
     try {
+      const { analyzeSpecification } = await import('./services/geminiService');
       const result = await analyzeSpecification(file);
       setSpecAnalysis(result);
 
@@ -224,13 +228,14 @@ export default function App() {
     setIsDrawingLoading(true);
     setError(null);
     try {
+      const { analyzeDrawings } = await import('./services/geminiService');
       const result = await analyzeDrawings(file);
       setDrawingAnalysis(result);
       if (result.ductwork?.length > 0) {
-        setDuctworkTakeoff(result.ductwork.map(d => ({ ...d, id: uuidv4() })));
+        setDuctworkTakeoff(result.ductwork.map(d => ({ ...d, id: newId() })));
       }
       if (result.piping?.length > 0) {
-        setPipingTakeoff(result.piping.map(p => ({ ...p, id: uuidv4() })));
+        setPipingTakeoff(result.piping.map(p => ({ ...p, id: newId() })));
       }
     } catch (err) {
       setError('Failed to analyze drawings. Please check your API key and file format.');
@@ -612,8 +617,8 @@ const TakeoffEntryStep: React.FC<{
     <Card>
       <h2 className="text-2xl font-bold text-white mb-6">Manual Takeoff Entry</h2>
       <div className="space-y-8">
-        {renderTakeoffTable('Ductwork', ductwork, setDuctwork, { id: uuidv4(), size: '', length: 0, fittings: 0 })}
-        {renderTakeoffTable('Piping', piping, setPiping, { id: uuidv4(), size: '', length: 0, fittings: 0 })}
+        {renderTakeoffTable('Ductwork', ductwork, setDuctwork, { id: newId(), size: '', length: 0, fittings: 0 })}
+        {renderTakeoffTable('Piping', piping, setPiping, { id: newId(), size: '', length: 0, fittings: 0 })}
       </div>
     </Card>
   );
@@ -1117,7 +1122,8 @@ const GeneratedQuoteStep: React.FC<{
   };
 
   // Save current UI-generated quote to dashboard (localStorage)
-  const saveToDashboard = () => {
+  const saveToDashboard = async () => {
+    const { generateQuoteFromUI } = await import('./estimator');
     const generated = generateQuoteFromUI(props.projectInfo, props.ductwork, props.piping, props.specAnalysis);
     const projectsJson = localStorage.getItem('gi_projects');
     const projects = projectsJson ? JSON.parse(projectsJson) : [];
@@ -1204,7 +1210,9 @@ const GeneratedQuoteStep: React.FC<{
             </div>
             <div className="ml-2 flex items-center gap-2">
               <Button variant="secondary" size="sm" onClick={() => {
-                const result = generateDemoQuote();
+                (async () => {
+                  const { generateDemoQuote } = await import('./estimator');
+                  const result = generateDemoQuote();
                 // download quote
                 const blob = new Blob([result.quoteText], { type: 'text/plain' });
                 const url = URL.createObjectURL(blob);
@@ -1221,10 +1229,16 @@ const GeneratedQuoteStep: React.FC<{
                 b.download = `material_list_${result.quoteNumber}.txt`;
                 b.click();
                 URL.revokeObjectURL(mu);
+                })().catch((err) => {
+                  console.error(err);
+                  alert('Failed to run demo estimator.');
+                });
               }}>Run Demo Estimator</Button>
 
               <Button variant="primary" size="sm" onClick={() => {
-                const generated = generateQuoteFromUI(props.projectInfo, props.ductwork, props.piping, props.specAnalysis);
+                (async () => {
+                  const { generateQuoteFromUI } = await import('./estimator');
+                  const generated = generateQuoteFromUI(props.projectInfo, props.ductwork, props.piping, props.specAnalysis);
                 // Download files directly
                 const qb = new Blob([generated.quoteText], { type: 'text/plain' });
                 const qu = URL.createObjectURL(qb);
@@ -1241,9 +1255,13 @@ const GeneratedQuoteStep: React.FC<{
                 b2.download = `material_list_${generated.quoteNumber}.txt`;
                 b2.click();
                 URL.revokeObjectURL(mu2);
+                })().catch((err) => {
+                  console.error(err);
+                  alert('Failed to export quote.');
+                });
               }}>Export Quote</Button>
 
-              <Button variant="secondary" size="sm" onClick={() => { saveToDashboard(); }}>Save to Dashboard</Button>
+              <Button variant="secondary" size="sm" onClick={() => { void saveToDashboard(); }}>Save to Dashboard</Button>
             </div>
           </div>
         </div>
