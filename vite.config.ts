@@ -14,6 +14,22 @@ export default defineConfig(({ mode }) => {
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
       },
+      build: {
+        target: 'es2022',
+        sourcemap: false,
+        cssCodeSplit: true,
+        rollupOptions: {
+          output: {
+            manualChunks(id) {
+              if (!id.includes('node_modules')) return;
+
+              if (id.includes('@google/genai')) return 'genai';
+              if (id.includes('/react/') || id.includes('/react-dom/')) return 'react-vendor';
+              return 'vendor';
+            },
+          },
+        },
+      },
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),
