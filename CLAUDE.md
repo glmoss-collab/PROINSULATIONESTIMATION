@@ -21,6 +21,7 @@
 **Primary Purpose:** AI-powered HVAC insulation estimation with multiple interfaces and intelligent agents
 **Primary AI Model:** Claude Opus 4.5 (via Anthropic Agents SDK and Vertex AI Model Garden)
 **Secondary AI:** Google Gemini (legacy support for PDF extraction)
+**Primary Deployment Target:** Google Cloud Platform (Cloud Run, Firestore, GCS, Secret Manager)
 
 ### What This System Does
 
@@ -31,7 +32,9 @@ This system transforms manual insulation estimation (2-4 hours) into an intellig
 - **Intelligent validation** and cross-referencing
 - **Professional quote generation** with material lists and pricing
 - **Cost-saving alternatives** and recommendations
-- **Multiple deployment options** (Web, CLI, API)
+- **Multiple deployment options** (Web, CLI, API, Cloud Run)
+- **Enterprise GCP integration** with Vertex AI, Firestore, GCS, and Secret Manager
+- **Multi-stage workflow orchestration** with validation gates and quality metrics
 
 ### Key Metrics
 
@@ -49,64 +52,101 @@ This system transforms manual insulation estimation (2-4 hours) into an intellig
 ```
 PROINSULATIONESTIMATION/
 ├── Core Application Files (Python)
-│   ├── claude_estimation_agent.py      # Main agent orchestrator (400 lines)
-│   ├── claude_agent_tools.py           # Agent tool implementations (650 lines)
-│   ├── hvac_insulation_estimator.py    # Core estimation engine (1000 lines)
-│   ├── agent_estimation_app.py         # Agent-powered Streamlit UI (400 lines)
-│   ├── streamlit_app.py                # Full-featured SaaS app (1200 lines)
-│   ├── estimation_app.py               # Simple Claude app (600 lines)
-│   └── demo_agent.py                   # Demo scripts and examples (400 lines)
+│   ├── claude_estimation_agent.py      # Main agent orchestrator (616 lines)
+│   ├── claude_agent_tools.py           # Agent tool implementations (1107 lines)
+│   ├── hvac_insulation_estimator.py    # Core estimation engine (1081 lines)
+│   ├── agent_estimation_app.py         # Agent-powered Streamlit UI (431 lines)
+│   ├── streamlit_app.py                # Full-featured SaaS app (841 lines)
+│   ├── estimation_app.py               # Simple Claude app (524 lines)
+│   └── demo_agent.py                   # Demo scripts and examples (374 lines)
 │
 ├── Utility Modules (Production-Ready)
-│   ├── utils_cache.py                  # Caching system (90% cost savings)
-│   ├── utils_async.py                  # Async batch processing (5-10x faster)
-│   ├── utils_tracking.py               # API cost tracking and monitoring
-│   ├── utils_pdf.py                    # Optimized PDF processing (PyMuPDF)
-│   ├── pydantic_models.py              # Type-safe data validation
-│   └── errors.py                       # Custom exception hierarchy
+│   ├── utils_cache.py                  # File-based caching (339 lines)
+│   ├── utils_async.py                  # Async batch processing (326 lines)
+│   ├── utils_tracking.py               # API cost tracking (300 lines)
+│   ├── utils_pdf.py                    # Optimized PDF processing (369 lines)
+│   ├── pydantic_models.py              # Type-safe data validation (417 lines)
+│   └── errors.py                       # Custom exception hierarchy (410 lines)
+│
+├── GCP Integration Modules
+│   ├── cloud_config.py                 # Centralized cloud configuration (325 lines)
+│   ├── gcs_storage.py                  # Google Cloud Storage abstraction (541 lines)
+│   ├── firestore_cache.py              # Distributed Firestore caching (613 lines)
+│   ├── secrets_manager.py              # Google Secret Manager integration (281 lines)
+│   └── vertex_ai_client.py            # Vertex AI Model Garden client (723 lines)
+│
+├── Workflow & Orchestration
+│   ├── claude_workflow_enhancement.py  # Multi-stage workflow orchestrator (818 lines)
+│   └── workflow_simple_example.py      # Workflow integration examples (303 lines)
+│
+├── Skill Modules
+│   ├── hvac_insulation_skill.py        # Standalone Agent SDK skill (588 lines)
+│   └── hvac_skill_example.py           # Skill usage examples (339 lines)
 │
 ├── Legacy/Alternative Systems
-│   ├── gemini_pdf_extractor.py         # Google Gemini PDF processor
-│   └── process_my_pdfs.py              # Simple PDF helper script
+│   ├── gemini_pdf_extractor.py         # Google Gemini PDF processor (339 lines)
+│   └── process_my_pdfs.py              # Simple PDF helper script (195 lines)
 │
 ├── Frontend (React/TypeScript)
-│   ├── App.tsx                         # React application (1500 lines)
-│   ├── estimator.ts                    # TypeScript estimation engine
-│   ├── geminiService.ts                # Gemini API integration
-│   ├── types.ts                        # TypeScript type definitions
-│   └── constants.ts                    # Configuration constants
+│   ├── App.tsx                         # React application (1281 lines)
+│   ├── estimator.ts                    # TypeScript estimation engine (269 lines)
+│   ├── geminiService.ts                # Gemini API integration (345 lines)
+│   ├── services/geminiService.ts       # Gemini service (services dir) (345 lines)
+│   ├── types.ts                        # TypeScript type definitions (101 lines)
+│   ├── constants.ts                    # Configuration constants (79 lines)
+│   ├── index.tsx                       # React entry point (16 lines)
+│   └── vite.config.ts                  # Vite build configuration (23 lines)
 │
 ├── Testing
-│   └── tests/
-│       └── test_agent_tools.py         # Test suite (45+ tests, 600 lines)
+│   ├── tests/
+│   │   └── test_agent_tools.py         # Main test suite (45+ tests, 544 lines)
+│   └── test_easiest_workflow.py        # Workflow orchestration tests (452 lines)
 │
-├── Documentation (10,000+ lines total)
+├── Documentation (18 files, 250+ KB)
 │   ├── README.md                       # Main entry point
+│   ├── CLAUDE.md                       # AI assistant guide (this file)
 │   ├── PROJECT_SUMMARY.md              # Complete project overview
 │   ├── CLAUDE_AGENTS_ARCHITECTURE.md   # System architecture
 │   ├── USER_MANUAL.md                  # Complete user guide
 │   ├── AGENT_SETUP_GUIDE.md            # Technical setup
-│   ├── DEPLOYMENT_GUIDE.md             # Hosting options
-│   ├── PRODUCTION_ENHANCEMENTS.md      # Optimizations
+│   ├── AI_SETUP_GUIDE.md               # AI setup instructions
+│   ├── DEPLOYMENT_GUIDE.md             # Hosting options (detailed)
+│   ├── DEPLOYMENT.md                   # Deployment overview
+│   ├── GCP_MIGRATION_GUIDE.md          # Enterprise GCP integration guide
+│   ├── PRODUCTION_ENHANCEMENTS.md      # Performance optimizations
 │   ├── QUICK_START_CHECKLIST.md        # 30-min setup
-│   └── STREAMLIT_README.md             # Streamlit app docs
+│   ├── STREAMLIT_README.md             # Streamlit app docs
+│   ├── TECHNOLOGY_ROADMAP_2025.md      # 2025 SaaS platform roadmap
+│   ├── Estimator_Agent_Workflow.md     # Agent workflow documentation
+│   ├── HVAC_SKILL_README.md            # HVAC skill documentation
+│   └── README_STUDIO.md               # Google AI Studio notes
 │
 ├── Configuration
-│   ├── requirements.txt                # Python dependencies
+│   ├── requirements.txt                # Python dependencies (83 lines)
 │   ├── package.json                    # JavaScript dependencies
+│   ├── tsconfig.json                   # TypeScript configuration
 │   ├── .streamlit/config.toml          # Streamlit configuration
-│   ├── Dockerfile                      # Container definition
-│   ├── docker-compose.yml              # Multi-container setup
-│   └── .gitignore                      # Git ignore patterns
+│   ├── .streamlit/secrets.toml.example # Secrets template
+│   ├── Dockerfile                      # Container definition (Cloud Run)
+│   ├── docker-compose.yml              # Local dev multi-container setup
+│   ├── cloudbuild.yaml                 # Google Cloud Build CI/CD
+│   ├── .gitignore                      # Git ignore patterns
+│   ├── .devcontainer/devcontainer.json # VS Code dev container
+│   └── .github/copilot-instructions.md # GitHub Copilot instructions
 │
 ├── Data Files
-│   ├── pricebook_sample.json           # Sample pricing data
+│   ├── pricebook_sample.json           # Sample pricing data (19 items)
 │   ├── measurements_template.csv       # Measurement template
 │   └── metadata.json                   # Project metadata
 │
-└── Scripts
-    ├── run.sh                          # Unix startup script
-    └── run.bat                         # Windows startup script
+├── Scripts
+│   ├── run.sh                          # Unix startup script
+│   └── run.bat                         # Windows startup script
+│
+└── Other
+    ├── studio_wrapper.js               # Google AI Studio JS wrapper
+    ├── google_ai_studio_package.zip    # AI Studio package
+    └── index.html                      # Vite HTML entry point
 ```
 
 ---
@@ -126,6 +166,7 @@ pdfplumber>=0.10.0             # Text extraction
 pdf2image>=1.16.0              # Image conversion
 pymupdf>=1.23.0                # Fast rendering (3-5x faster)
 opencv-python-headless>=4.8.0  # Computer vision
+pillow>=10.0.0                 # Image processing
 
 # Web Framework
 streamlit>=1.30.0              # UI framework
@@ -134,6 +175,16 @@ streamlit>=1.30.0              # UI framework
 pandas>=2.0.0                  # DataFrames
 numpy>=1.24.0                  # Numerical operations
 openpyxl>=3.1.0                # Excel support
+
+# Visualization
+plotly>=5.18.0                 # Interactive charts
+altair>=5.2.0                  # Declarative visualizations
+
+# Google Cloud Platform
+google-cloud-storage>=2.10.0       # GCS for PDF uploads/files
+google-cloud-firestore>=2.11.0     # Distributed caching
+google-cloud-secret-manager>=2.16.0 # Secure API key storage
+google-cloud-logging>=3.5.0        # Structured logging in GCP
 
 # Performance
 aiofiles>=23.0.0               # Async file operations
@@ -156,6 +207,7 @@ pytest-cov>=4.1.0              # Coverage reporting
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@types/node": "^22.14.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "@vitejs/plugin-react": "^5.0.0"
@@ -170,59 +222,85 @@ pytest-cov>=4.1.0              # Coverage reporting
 ### System Architecture (High-Level)
 
 ```
-┌─────────────────────────────────────────┐
-│         USER INTERFACES                 │
-├─────────────────────────────────────────┤
-│  • agent_estimation_app.py (Streamlit)  │  ← RECOMMENDED: Conversational
-│  • streamlit_app.py (Streamlit)         │  ← Full-featured SaaS
-│  • App.tsx (React/TypeScript)           │  ← Web UI
-│  • claude_estimation_agent.py (CLI)     │  ← Terminal
-│  • Python API (programmatic)            │  ← Code integration
-└──────────────┬──────────────────────────┘
-               │
-               ↓
-┌─────────────────────────────────────────┐
-│      CLAUDE ESTIMATION AGENT            │
-├─────────────────────────────────────────┤
-│  • Multi-turn conversations             │
-│  • Tool orchestration                   │
-│  • Intelligent decision-making          │
-│  • Error recovery & validation          │
-│  • Parallel processing coordination     │
-└──────────────┬──────────────────────────┘
-               │
-               ↓
-┌─────────────────────────────────────────┐
-│         AGENT TOOL SUITE                │
-├─────────────────────────────────────────┤
-│  1. extract_project_info                │
-│  2. extract_specifications              │
-│  3. extract_measurements                │
-│  4. validate_specifications             │
-│  5. cross_reference_data                │
-│  6. calculate_material_quantities       │
-│  7. generate_detailed_quote             │
-└──────────────┬──────────────────────────┘
-               │
-               ↓
-┌─────────────────────────────────────────┐
-│      CORE ESTIMATION ENGINE             │
-├─────────────────────────────────────────┤
-│  • SpecificationExtractor               │
-│  • DrawingMeasurementExtractor          │
-│  • PricingEngine                        │
-│  • QuoteGenerator                       │
-└──────────────┬──────────────────────────┘
-               │
-               ↓
-┌─────────────────────────────────────────┐
-│          DATA LAYER                     │
-├─────────────────────────────────────────┤
-│  • Distributor Price Books (JSON/CSV)   │
-│  • Material Specifications Library      │
-│  • Labor Rate Tables                    │
-│  • Building Code References             │
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│            USER INTERFACES                   │
+├──────────────────────────────────────────────┤
+│  • agent_estimation_app.py (Streamlit)       │  ← RECOMMENDED: Conversational
+│  • streamlit_app.py (Streamlit)              │  ← Full-featured SaaS
+│  • App.tsx (React/TypeScript)                │  ← Web UI
+│  • claude_estimation_agent.py (CLI)          │  ← Terminal
+│  • hvac_insulation_skill.py (Agent SDK)      │  ← Embeddable skill
+│  • Python API (programmatic)                 │  ← Code integration
+└──────────────────┬───────────────────────────┘
+                   │
+                   ↓
+┌──────────────────────────────────────────────┐
+│     WORKFLOW ORCHESTRATION LAYER             │
+├──────────────────────────────────────────────┤
+│  • WorkflowOrchestrator (5-stage pipeline)   │
+│  • ValidationGate (quality checks)           │
+│  • RecommendationEngine (suggestions)        │
+│  • Audit trail and metrics tracking          │
+│  Stages: discovery → document_analysis →     │
+│    data_enrichment → calculation →           │
+│    quote_generation                          │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ↓
+┌──────────────────────────────────────────────┐
+│       CLAUDE ESTIMATION AGENT                │
+├──────────────────────────────────────────────┤
+│  • Multi-turn conversations                  │
+│  • Tool orchestration                        │
+│  • Intelligent decision-making               │
+│  • Error recovery & validation               │
+│  • Parallel processing coordination          │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ↓
+┌──────────────────────────────────────────────┐
+│          AGENT TOOL SUITE                    │
+├──────────────────────────────────────────────┤
+│  1. extract_project_info                     │
+│  2. extract_specifications                   │
+│  3. extract_measurements                     │
+│  4. validate_specifications                  │
+│  5. cross_reference_data                     │
+│  6. calculate_material_quantities            │
+│  7. generate_detailed_quote                  │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ↓
+┌──────────────────────────────────────────────┐
+│       CORE ESTIMATION ENGINE                 │
+├──────────────────────────────────────────────┤
+│  • SpecificationExtractor                    │
+│  • DrawingMeasurementExtractor               │
+│  • PricingEngine                             │
+│  • QuoteGenerator                            │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ↓
+┌──────────────────────────────────────────────┐
+│     GCP INFRASTRUCTURE LAYER                 │
+├──────────────────────────────────────────────┤
+│  • Vertex AI Model Garden (Claude API)       │
+│  • Google Cloud Storage (file management)    │
+│  • Firestore (distributed caching)           │
+│  • Secret Manager (API key storage)          │
+│  • Cloud Run (container hosting)             │
+│  • Cloud Build (CI/CD pipeline)              │
+└──────────────────┬───────────────────────────┘
+                   │
+                   ↓
+┌──────────────────────────────────────────────┐
+│           DATA LAYER                         │
+├──────────────────────────────────────────────┤
+│  • Distributor Price Books (JSON/CSV)        │
+│  • Material Specifications Library           │
+│  • Labor Rate Tables                         │
+│  • Building Code References                  │
+└──────────────────────────────────────────────┘
 ```
 
 ### Core Components
@@ -261,6 +339,7 @@ pytest-cov>=4.1.0              # Coverage reporting
 - Tool handler functions with type hints
 - Pydantic schemas for input/output validation
 - Claude vision API integration for PDF analysis
+- PDF-to-base64 conversion utilities
 
 #### 3. Core Engine (`hvac_insulation_estimator.py`)
 
@@ -272,42 +351,97 @@ pytest-cov>=4.1.0              # Coverage reporting
 - `PricingEngine`: Calculates material quantities and pricing
 - `QuoteGenerator`: Generates professional quotes
 
-**Data Models:**
+**Data Models (dataclasses):**
 - `InsulationSpec`: Specification data structure
 - `MeasurementItem`: Measurement data structure
 - `MaterialItem`: Material list item
 - `ProjectQuote`: Complete quote data
 
-#### 4. Production Utilities
+#### 4. Workflow Orchestration (`claude_workflow_enhancement.py`)
+
+**Purpose:** Multi-stage estimation pipeline with validation and quality tracking
+
+**Key Classes:**
+- `WorkflowOrchestrator`: Manages 5-stage estimation pipeline
+- `ValidationGate`: Enforces quality checks between stages
+- `RecommendationEngine`: Generates intelligent suggestions
+
+**Workflow Stages:**
+1. `discovery` — Gather project info and requirements
+2. `document_analysis` — Extract specs and measurements from PDFs
+3. `data_enrichment` — Cross-reference, validate, and augment data
+4. `calculation` — Calculate material quantities and pricing
+5. `quote_generation` — Generate professional quote document
+
+#### 5. GCP Integration Layer
+
+**Cloud Configuration (`cloud_config.py`):**
+- `CloudConfig` dataclass auto-detects environment (local vs GCP)
+- Configures backends for caching, storage, and secrets
+- Supports local development and Cloud Run production
+
+**Storage (`gcs_storage.py`):**
+- `StorageBackend` interface with local filesystem and GCS implementations
+- Upload/download/delete operations
+- Signed URL generation for temporary file access
+
+**Distributed Caching (`firestore_cache.py`):**
+- `CacheBackend` interface with Firestore, memory, and optional Redis backends
+- TTL-based expiration for multi-instance Cloud Run deployments
+- Automatic fallback to memory caching when Firestore is unavailable
+
+**Secrets (`secrets_manager.py`):**
+- `SecretManager` class integrating Google Secret Manager
+- Falls back to environment variables for local development
+- Caches secrets in memory with version support
+
+**Vertex AI (`vertex_ai_client.py`):**
+- `VertexAIClaudeClient` wrapper for Claude Opus 4.5 via Vertex AI Model Garden
+- Enterprise GCP deployment with region support (us-central1, us-east4)
+- Handles authentication, retries, and token management
+
+#### 6. HVAC Skill Module (`hvac_insulation_skill.py`)
+
+**Purpose:** Standalone Agent SDK skill wrapping the estimation engine
+
+**Key Features:**
+- Embeddable into any Claude-powered application
+- Provides tool handlers and session state management
+- Can be integrated as a skill into other agents
+
+**Usage:** See `hvac_skill_example.py` for conversational, PDF analysis, and direct tool call examples.
+
+#### 7. Production Utilities
 
 **Caching (`utils_cache.py`):**
-- Intelligent caching for 90% API cost reduction
-- File-based and memory caching strategies
+- `FileCache` class with file-based caching
 - TTL management and cache invalidation
+- 90% API cost reduction through intelligent caching
 
 **Async Processing (`utils_async.py`):**
+- `AsyncBatchProcessor` for parallel PDF analysis
 - Batch processing for 5-10x speed improvement
-- Parallel API calls with rate limiting
-- Progress tracking and callbacks
+- Rate limiting and progress tracking
+- Uses `AsyncAnthropic` client
 
 **Cost Tracking (`utils_tracking.py`):**
-- Real-time API cost monitoring
-- Budget alerts and limits
-- Usage analytics and reporting
+- `APIUsageTracker` for real-time cost monitoring
+- Supports Claude Opus 4.5 pricing with prompt caching (cache reads 90% cheaper)
+- Budget alerts and usage analytics
 
 **PDF Processing (`utils_pdf.py`):**
-- Optimized rendering with PyMuPDF (3-5x faster)
+- Optimized rendering with PyMuPDF (3-5x faster than pdf2image)
 - Smart page selection (85% cost reduction)
-- Vision-ready image conversion
+- DPI optimization and Claude-compatible image sizing
 
 **Data Validation (`pydantic_models.py`):**
-- Type-safe data models
-- Automatic validation and error messages
-- Prevents malformed data
+- 12+ Pydantic models: `InsulationSpecExtracted`, `MeasurementItemExtracted`, `ProjectInfoExtracted`, `ValidationReport`, `QuoteLineItem`, etc.
+- Automatic validation with custom validators
+- Type-safe data throughout the pipeline
 
 **Error Handling (`errors.py`):**
-- Custom exception hierarchy (12 types)
-- Clear, actionable error messages
+- Custom exception hierarchy (12 types): `EstimationError`, `PDFError`, `PDFNotFoundError`, `SpecificationValidationError`, `APIKeyMissingError`, etc.
+- Context-rich error messages with suggestions
 - Structured error reporting
 
 ---
@@ -373,6 +507,7 @@ logger.error("Processing failed", exc_info=True)
 
 - **Python modules:** `lowercase_with_underscores.py`
 - **Utilities:** `utils_*.py` pattern
+- **GCP modules:** Named by service (e.g., `gcs_storage.py`, `firestore_cache.py`)
 - **Tests:** `test_*.py` pattern
 - **TypeScript:** `camelCase.ts`
 - **React components:** `PascalCase.tsx`
@@ -393,6 +528,10 @@ import pandas as pd
 from anthropic import Anthropic
 from pydantic import BaseModel
 
+# GCP imports third (when applicable)
+from google.cloud import storage
+from google.cloud import firestore
+
 # Local imports last
 from hvac_insulation_estimator import SpecificationExtractor
 from utils_cache import cache_result
@@ -405,13 +544,19 @@ from errors import ProcessingError
 
 ```bash
 # REQUIRED
-ANTHROPIC_API_KEY="sk-ant-..."     # Claude API key
+ANTHROPIC_API_KEY="sk-ant-..."        # Claude API key (direct or via Secret Manager)
+
+# GCP CONFIGURATION (for cloud deployment)
+GCP_PROJECT_ID="your-project-id"      # Google Cloud project
+GCP_REGION="us-central1"              # Default region
+GOOGLE_APPLICATION_CREDENTIALS="..."   # Service account key (local dev only)
 
 # OPTIONAL
-GEMINI_API_KEY="..."               # Google Gemini (legacy)
-CACHE_DIR="/path/to/cache"         # Cache directory (default: ./.cache)
-LOG_LEVEL="INFO"                   # Logging level (default: INFO)
-MAX_TOKENS=4096                    # Max tokens per request
+GEMINI_API_KEY="..."                  # Google Gemini (legacy)
+CACHE_DIR="/path/to/cache"            # Cache directory (default: ./.cache)
+LOG_LEVEL="INFO"                      # Logging level (default: INFO)
+MAX_TOKENS=4096                       # Max tokens per request
+MAX_CONCURRENT_REQUESTS=5             # Concurrency limit
 ```
 
 #### Agent Tool Design
@@ -506,7 +651,7 @@ if session_data["specifications"]:
 #### Caching Strategy
 
 ```python
-# ALWAYS cache expensive operations
+# Local caching (utils_cache.py)
 from utils_cache import cache_result
 
 @cache_result(ttl=3600)  # Cache for 1 hour
@@ -517,6 +662,13 @@ def analyze_pdf(pdf_path: str) -> Dict:
 
 # Cache key based on file content hash
 # Same content = cache hit (even different filename)
+
+# Distributed caching for Cloud Run (firestore_cache.py)
+from firestore_cache import FirestoreCacheBackend
+
+cache = FirestoreCacheBackend(project_id="my-project")
+cache.set("key", value, ttl=3600)
+result = cache.get("key")
 ```
 
 ---
@@ -549,6 +701,26 @@ pytest tests/
 python demo_agent.py --demo 1
 ```
 
+### Setting Up GCP Development
+
+```bash
+# 1. Install Google Cloud SDK
+# https://cloud.google.com/sdk/docs/install
+
+# 2. Authenticate
+gcloud auth application-default login
+
+# 3. Set project
+gcloud config set project YOUR_PROJECT_ID
+
+# 4. Set environment variables
+export GCP_PROJECT_ID="your-project-id"
+export GCP_REGION="us-central1"
+
+# 5. Verify GCP modules work
+python -c "from cloud_config import CloudConfig; print(CloudConfig())"
+```
+
 ### Running Applications
 
 ```bash
@@ -558,12 +730,18 @@ streamlit run agent_estimation_app.py
 # Full-featured SaaS app
 streamlit run streamlit_app.py
 
+# Simple Claude app
+streamlit run estimation_app.py
+
 # CLI interface
 python claude_estimation_agent.py
 
 # React web app
 npm install
 npm run dev
+
+# Workflow example
+python workflow_simple_example.py
 ```
 
 ### Testing Workflow
@@ -575,11 +753,37 @@ pytest tests/
 # Run specific test file
 pytest tests/test_agent_tools.py
 
+# Run workflow tests
+pytest test_easiest_workflow.py
+
 # Run with coverage
 pytest --cov=. --cov-report=html tests/
 
 # Run specific test
 pytest tests/test_agent_tools.py::test_extract_specifications
+
+# Run with verbose output
+pytest -v
+
+# Stop on first failure
+pytest -x
+
+# Run tests matching pattern
+pytest -k "extract"
+```
+
+### Docker / Cloud Run Deployment
+
+```bash
+# Local Docker
+docker build -t insulation-estimator .
+docker run -p 8501:8501 -e ANTHROPIC_API_KEY="..." insulation-estimator
+
+# Local with docker-compose (hot reload)
+docker-compose up
+
+# GCP Cloud Build (CI/CD)
+gcloud builds submit --config=cloudbuild.yaml
 ```
 
 ### Adding New Features
@@ -655,6 +859,26 @@ def system_prompt(self) -> str:
     """
 ```
 
+#### 4. Adding a New GCP Integration
+
+```python
+# Follow the pattern established by existing GCP modules:
+# 1. Define an interface/base class
+# 2. Implement local fallback for development
+# 3. Implement GCP backend for production
+# 4. Use cloud_config.py for environment detection
+
+from cloud_config import CloudConfig
+
+config = CloudConfig()
+if config.is_gcp:
+    # Use GCP backend
+    backend = GCPBackend(project_id=config.project_id)
+else:
+    # Use local fallback
+    backend = LocalBackend()
+```
+
 ### Git Workflow
 
 ```bash
@@ -680,10 +904,17 @@ git push -u origin feature/new-tool
 
 ```
 tests/
-└── test_agent_tools.py     # Main test suite (45+ tests)
-    ├── Unit Tests          # Test individual functions
-    ├── Integration Tests   # Test tool interactions
-    └── Performance Tests   # Test optimization effectiveness
+└── test_agent_tools.py          # Main test suite (45+ tests, 544 lines)
+    ├── Unit Tests               # Test individual functions
+    ├── Integration Tests        # Test tool interactions
+    └── Performance Tests        # Test optimization effectiveness
+
+test_easiest_workflow.py         # Workflow orchestration tests (452 lines, 5 tests)
+    ├── Workflow creation
+    ├── Stage access
+    ├── Data updates
+    ├── Stage completion
+    └── Recommendation engine
 ```
 
 ### Test Categories
@@ -717,7 +948,19 @@ def test_full_estimation_workflow():
     assert "$" in response2
 ```
 
-#### 3. Performance Tests
+#### 3. Workflow Tests
+
+```python
+def test_workflow_stage_completion():
+    """Test workflow stage progression."""
+    orchestrator = WorkflowOrchestrator()
+
+    assert orchestrator.current_stage == "discovery"
+    orchestrator.complete_stage("discovery")
+    assert orchestrator.current_stage == "document_analysis"
+```
+
+#### 4. Performance Tests
 
 ```python
 def test_cache_effectiveness():
@@ -735,24 +978,6 @@ def test_cache_effectiveness():
     # Cache should be 10x+ faster
     assert duration2 < duration1 / 10
     assert result1 == result2
-```
-
-### Test Fixtures
-
-```python
-# tests/conftest.py
-import pytest
-
-@pytest.fixture
-def sample_spec_pdf():
-    """Provide sample specification PDF."""
-    return "tests/fixtures/sample_spec.pdf"
-
-@pytest.fixture
-def mock_anthropic_client():
-    """Mock Anthropic client for testing."""
-    # Return mock client
-    pass
 ```
 
 ### Running Tests
@@ -819,49 +1044,60 @@ agent.run("Generate a detailed quote")
 # Quote is automatically saved to file
 ```
 
-### Task 3: Optimizing API Costs
+### Task 3: Using the Workflow Orchestrator
+
+```python
+from claude_workflow_enhancement import WorkflowOrchestrator
+
+orchestrator = WorkflowOrchestrator()
+
+# Check current stage
+print(orchestrator.current_stage)  # "discovery"
+
+# Add data to the workflow
+orchestrator.add_data("project_info", {...})
+
+# Complete a stage and move to next
+orchestrator.complete_stage("discovery")
+
+# Get recommendations
+recommendations = orchestrator.get_recommendations()
+```
+
+### Task 4: Optimizing API Costs
 
 ```python
 # Use caching for repeated operations
-from utils_cache import CacheManager
+from utils_cache import FileCache
 
-cache = CacheManager(cache_dir=".cache")
-
-# This will cache results
-@cache.cache_result(ttl=3600)
-def expensive_operation(data):
-    # API calls here
-    pass
+cache = FileCache(cache_dir=".cache")
 
 # Enable cost tracking
-from utils_tracking import CostTracker
+from utils_tracking import APIUsageTracker
 
-tracker = CostTracker()
-tracker.start_session()
-
-# ... do work ...
-
-report = tracker.end_session()
+tracker = APIUsageTracker()
+# ... do work, tracker records usage ...
+report = tracker.get_report()
 print(f"Total cost: ${report['total_cost']:.2f}")
 ```
 
-### Task 4: Batch Processing Multiple PDFs
+### Task 5: Batch Processing Multiple PDFs
 
 ```python
-from utils_async import batch_process_pdfs
+from utils_async import AsyncBatchProcessor
 
+processor = AsyncBatchProcessor()
 pdfs = ["spec1.pdf", "spec2.pdf", "spec3.pdf"]
 
-results = await batch_process_pdfs(
+results = await processor.process_batch(
     pdf_paths=pdfs,
-    processor_func=extract_specifications_handler,
     max_concurrent=3
 )
 
 # Results returned in same order as input
 ```
 
-### Task 5: Validating Data
+### Task 6: Validating Data
 
 ```python
 from pydantic_models import InsulationSpecExtracted
@@ -884,40 +1120,85 @@ except ValidationError as e:
     print(e.errors())
 ```
 
+### Task 7: Using Vertex AI (Enterprise)
+
+```python
+from vertex_ai_client import VertexAIClaudeClient
+
+client = VertexAIClaudeClient(
+    project_id="your-project",
+    region="us-central1"
+)
+
+response = client.create_message(
+    model="claude-opus-4-5-20251101",
+    messages=[{"role": "user", "content": "Analyze this spec..."}],
+    max_tokens=4096
+)
+```
+
+### Task 8: Using the HVAC Skill
+
+```python
+from hvac_insulation_skill import HVACInsulationSkill
+
+skill = HVACInsulationSkill()
+
+# Conversational estimation
+response = skill.run("I need insulation for a 24-inch supply duct")
+
+# Or integrate into another agent as a tool
+```
+
 ---
 
 ## File Organization
 
 ### Python Modules
 
-| File | Purpose | Size | Key Classes/Functions |
-|------|---------|------|----------------------|
-| `claude_estimation_agent.py` | Agent orchestrator | 400 lines | `InsulationEstimationAgent` |
-| `claude_agent_tools.py` | Tool implementations | 650 lines | 7 tool handlers + schemas |
-| `hvac_insulation_estimator.py` | Core engine | 1000 lines | `SpecificationExtractor`, `PricingEngine`, `QuoteGenerator` |
-| `pydantic_models.py` | Data validation | 400 lines | 12+ Pydantic models |
-| `utils_cache.py` | Caching system | 500 lines | `CacheManager`, decorators |
-| `utils_async.py` | Async processing | 350 lines | `batch_process_*` functions |
-| `utils_tracking.py` | Cost tracking | 400 lines | `CostTracker`, analytics |
-| `utils_pdf.py` | PDF processing | 450 lines | Optimized rendering |
-| `errors.py` | Error handling | 350 lines | 12 custom exception types |
+| File | Purpose | Lines | Key Classes/Functions |
+|------|---------|-------|----------------------|
+| `claude_estimation_agent.py` | Agent orchestrator | 616 | `InsulationEstimationAgent` |
+| `claude_agent_tools.py` | Tool implementations | 1107 | 7 tool handlers + schemas |
+| `hvac_insulation_estimator.py` | Core engine | 1081 | `SpecificationExtractor`, `PricingEngine`, `QuoteGenerator` |
+| `claude_workflow_enhancement.py` | Workflow orchestration | 818 | `WorkflowOrchestrator`, `ValidationGate`, `RecommendationEngine` |
+| `vertex_ai_client.py` | Vertex AI integration | 723 | `VertexAIClaudeClient` |
+| `firestore_cache.py` | Distributed caching | 613 | `CacheBackend`, `FirestoreCacheBackend` |
+| `hvac_insulation_skill.py` | Agent SDK skill | 588 | `HVACInsulationSkill` |
+| `gcs_storage.py` | Cloud storage | 541 | `StorageBackend`, GCS operations |
+| `pydantic_models.py` | Data validation | 417 | 12+ Pydantic models |
+| `errors.py` | Error handling | 410 | 12 custom exception types |
+| `utils_pdf.py` | PDF processing | 369 | PyMuPDF optimized rendering |
+| `utils_cache.py` | File-based caching | 339 | `FileCache`, TTL management |
+| `utils_async.py` | Async processing | 326 | `AsyncBatchProcessor` |
+| `cloud_config.py` | Cloud configuration | 325 | `CloudConfig` (auto-detect env) |
+| `utils_tracking.py` | Cost tracking | 300 | `APIUsageTracker` |
+| `secrets_manager.py` | Secret management | 281 | `SecretManager` |
 
 ### Streamlit Apps
 
-| File | Purpose | Features |
-|------|---------|----------|
-| `agent_estimation_app.py` | Agent-powered UI | Conversational interface, chat history, file uploads |
-| `streamlit_app.py` | Full-featured SaaS | Complete workflow, advanced features, dashboards |
-| `estimation_app.py` | Simple Claude app | Basic Claude integration, minimal UI |
+| File | Purpose | Lines | Features |
+|------|---------|-------|----------|
+| `agent_estimation_app.py` | Agent-powered UI | 431 | Conversational interface, chat history, file uploads |
+| `streamlit_app.py` | Full-featured SaaS | 841 | Complete workflow, advanced features, dashboards |
+| `estimation_app.py` | Simple Claude app | 524 | Basic Claude integration, minimal UI |
 
 ### TypeScript/React
 
-| File | Purpose | Technologies |
-|------|---------|--------------|
-| `App.tsx` | Main React app | React 19, TypeScript, Vite |
-| `estimator.ts` | Estimation logic | TypeScript calculation engine |
-| `geminiService.ts` | Gemini integration | Google Gemini API |
-| `types.ts` | Type definitions | TypeScript interfaces |
+| File | Purpose | Lines | Technologies |
+|------|---------|-------|--------------|
+| `App.tsx` | Main React app | 1281 | React 19, TypeScript, Vite |
+| `geminiService.ts` | Gemini integration | 345 | Google Gemini API |
+| `estimator.ts` | Estimation logic | 269 | TypeScript calculation engine |
+| `types.ts` | Type definitions | 101 | TypeScript interfaces |
+| `constants.ts` | Pricing constants | 79 | Pricing data, labor rates |
+
+### Test Files
+
+| File | Purpose | Lines | Test Count |
+|------|---------|-------|------------|
+| `tests/test_agent_tools.py` | Main test suite | 544 | 45+ tests |
+| `test_easiest_workflow.py` | Workflow tests | 452 | 5 tests |
 
 ---
 
@@ -930,7 +1211,8 @@ except ValidationError as e:
 1. **Read existing documentation first**
    - Check README.md for overview
    - Review CLAUDE_AGENTS_ARCHITECTURE.md for design
-   - Consult relevant guides before asking
+   - Consult GCP_MIGRATION_GUIDE.md for cloud infrastructure
+   - Review Estimator_Agent_Workflow.md for workflow details
 
 2. **Use type hints everywhere**
    ```python
@@ -998,6 +1280,20 @@ except ValidationError as e:
    - Update relevant .md files
    - Add examples if needed
 
+9. **Use `cloud_config.py` for environment detection**
+   ```python
+   from cloud_config import CloudConfig
+   config = CloudConfig()
+   if config.is_gcp:
+       # GCP-specific behavior
+   ```
+
+10. **Follow the GCP module pattern** for new cloud integrations
+    - Define an interface/base class
+    - Implement local fallback
+    - Implement cloud backend
+    - Use `CloudConfig` for detection
+
 #### DON'T:
 
 1. **Don't modify core estimation logic without testing**
@@ -1005,13 +1301,14 @@ except ValidationError as e:
    - Changes affect all interfaces
    - Always run full test suite
 
-2. **Don't commit API keys**
+2. **Don't commit API keys or credentials**
    ```python
    # Bad
    api_key = "sk-ant-..."
 
    # Good
    api_key = os.getenv("ANTHROPIC_API_KEY")
+   # Or use secrets_manager.py for production
    ```
 
 3. **Don't use print() for logging**
@@ -1032,7 +1329,7 @@ except ValidationError as e:
 5. **Don't make API calls without caching**
    - API calls are expensive
    - Caching saves 90%+ costs
-   - Use `@cache_result` decorator
+   - Use `@cache_result` decorator or `firestore_cache.py`
 
 6. **Don't modify system prompts without approval**
    - System prompt affects all agent behavior
@@ -1043,6 +1340,11 @@ except ValidationError as e:
    - Use existing modules
    - Keep codebase organized
    - Follow naming conventions
+
+8. **Don't hardcode GCP configuration**
+   - Use `cloud_config.py` for environment detection
+   - Use `secrets_manager.py` for API keys
+   - Support both local and cloud environments
 
 ### Code Review Checklist
 
@@ -1058,6 +1360,7 @@ Before submitting changes:
 - [ ] Documentation updated if needed
 - [ ] Code follows existing patterns
 - [ ] Caching used for expensive operations
+- [ ] GCP modules support local fallback
 
 ### Common Pitfalls
 
@@ -1093,6 +1396,11 @@ Before submitting changes:
    )
    ```
 
+6. **Ignoring local/cloud duality**
+   - Always provide local fallbacks for GCP services
+   - Test both code paths
+   - Use `CloudConfig` for detection
+
 ### Best Practices for AI Assistants
 
 1. **Understand the domain**
@@ -1120,6 +1428,11 @@ Before submitting changes:
    - Future AI assistants will thank you
    - Users rely on accurate docs
 
+6. **Understand the GCP integration**
+   - Review `GCP_MIGRATION_GUIDE.md` before touching cloud modules
+   - `cloud_config.py` is the entry point for environment detection
+   - All GCP modules have local development fallbacks
+
 ---
 
 ## Deployment Considerations
@@ -1127,8 +1440,12 @@ Before submitting changes:
 ### Environment Variables Required
 
 ```bash
-# Production
+# Production (Direct Anthropic)
 ANTHROPIC_API_KEY="sk-ant-..."
+
+# Production (Vertex AI / GCP)
+GCP_PROJECT_ID="your-project-id"
+GCP_REGION="us-central1"
 
 # Optional
 GEMINI_API_KEY="..."
@@ -1137,7 +1454,7 @@ LOG_LEVEL="WARNING"
 MAX_CONCURRENT_REQUESTS=5
 ```
 
-### Docker Deployment
+### Docker Deployment (Local)
 
 ```bash
 # Build image
@@ -1147,6 +1464,22 @@ docker build -t insulation-estimator .
 docker run -p 8501:8501 \
   -e ANTHROPIC_API_KEY="..." \
   insulation-estimator
+
+# Docker Compose (with hot reload)
+docker-compose up
+```
+
+### GCP Cloud Run Deployment
+
+```bash
+# Using Cloud Build CI/CD (recommended)
+gcloud builds submit --config=cloudbuild.yaml
+
+# Manual deployment
+gcloud run deploy insulation-estimator \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated
 ```
 
 ### Streamlit Cloud Deployment
@@ -1159,10 +1492,11 @@ docker run -p 8501:8501 \
 
 ### Performance Optimization
 
-- **Enable caching:** Set `CACHE_DIR` environment variable
-- **Use async processing:** For batch operations
-- **Monitor costs:** Use `CostTracker` in production
+- **Enable caching:** Set `CACHE_DIR` environment variable (local) or use Firestore (GCP)
+- **Use async processing:** For batch operations via `utils_async.py`
+- **Monitor costs:** Use `APIUsageTracker` in production
 - **Limit concurrent requests:** Set `MAX_CONCURRENT_REQUESTS`
+- **Use Vertex AI:** For enterprise deployments with SLA guarantees
 
 ---
 
@@ -1175,10 +1509,16 @@ docker run -p 8501:8501 \
 python demo_agent.py --demo 1          # Run demo
 streamlit run agent_estimation_app.py  # Start web app
 pytest tests/                          # Run tests
+pytest test_easiest_workflow.py        # Run workflow tests
 
 # Production
-docker-compose up                      # Start containers
+docker-compose up                      # Start containers (local)
+gcloud builds submit --config=cloudbuild.yaml  # Deploy to GCP
 python claude_estimation_agent.py      # CLI interface
+
+# React frontend
+npm install && npm run dev             # Development
+npm run build                          # Production build
 ```
 
 ### Key Files to Modify
@@ -1188,24 +1528,32 @@ python claude_estimation_agent.py      # CLI interface
 - **Add data model:** `pydantic_models.py`
 - **Add utility:** `utils_*.py`
 - **Update UI:** `agent_estimation_app.py` or `streamlit_app.py`
+- **Add GCP service:** Follow pattern in `cloud_config.py` / `gcs_storage.py`
+- **Add workflow stage:** `claude_workflow_enhancement.py`
+- **Create embeddable skill:** `hvac_insulation_skill.py`
 
 ### Getting Help
 
 - **User guides:** `USER_MANUAL.md`, `QUICK_START_CHECKLIST.md`
 - **Technical docs:** `CLAUDE_AGENTS_ARCHITECTURE.md`, `AGENT_SETUP_GUIDE.md`
-- **Deployment:** `DEPLOYMENT_GUIDE.md`
+- **Deployment:** `DEPLOYMENT_GUIDE.md`, `DEPLOYMENT.md`
+- **GCP integration:** `GCP_MIGRATION_GUIDE.md`
 - **Optimizations:** `PRODUCTION_ENHANCEMENTS.md`
+- **Roadmap:** `TECHNOLOGY_ROADMAP_2025.md`
+- **Workflow:** `Estimator_Agent_Workflow.md`
+- **HVAC Skill:** `HVAC_SKILL_README.md`
 
 ---
 
 ## Version History
 
-- **v2.0 (Current):** Production-ready with Claude Agents SDK
+- **v2.5 (Current):** Enterprise GCP integration, workflow orchestration, HVAC skill module
+- **v2.0:** Production-ready with Claude Agents SDK
 - **v1.5:** Basic Claude integration
 - **v1.0:** Initial release with Gemini
 
 ---
 
-**Last Updated:** 2025-11-20
+**Last Updated:** 2026-02-19
 **Maintained By:** Development Team
 **For Questions:** See documentation or GitHub issues
