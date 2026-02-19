@@ -97,6 +97,22 @@ PROINSULATIONESTIMATION/
 │   ├── index.tsx                       # React entry point (16 lines)
 │   └── vite.config.ts                  # Vite build configuration (23 lines)
 │
+├── Figma Plugin (figma-plugin/)
+│   ├── manifest.json                   # Figma plugin manifest
+│   ├── package.json                    # Plugin dependencies
+│   ├── tsconfig.json                   # TypeScript configuration
+│   ├── webpack.config.js               # Sandbox code build config
+│   ├── webpack.ui.config.js            # UI build config
+│   └── src/
+│       ├── code.ts                     # Figma sandbox (scene graph access)
+│       ├── ui.tsx                       # Plugin UI (React, tabbed interface)
+│       ├── ui.html                      # UI HTML shell
+│       ├── types.ts                     # Plugin-specific type definitions
+│       ├── services/
+│       │   └── estimationService.ts    # Backend API + local estimation
+│       └── utils/
+│           └── measurementExtractor.ts # HVAC node classification & measurement
+│
 ├── Testing
 │   ├── tests/
 │   │   └── test_agent_tools.py         # Main test suite (45+ tests, 544 lines)
@@ -228,6 +244,7 @@ pytest-cov>=4.1.0              # Coverage reporting
 │  • agent_estimation_app.py (Streamlit)       │  ← RECOMMENDED: Conversational
 │  • streamlit_app.py (Streamlit)              │  ← Full-featured SaaS
 │  • App.tsx (React/TypeScript)                │  ← Web UI
+│  • figma-plugin/ (Figma Plugin)              │  ← Design tool integration
 │  • claude_estimation_agent.py (CLI)          │  ← Terminal
 │  • hvac_insulation_skill.py (Agent SDK)      │  ← Embeddable skill
 │  • Python API (programmatic)                 │  ← Code integration
@@ -411,7 +428,28 @@ pytest-cov>=4.1.0              # Coverage reporting
 
 **Usage:** See `hvac_skill_example.py` for conversational, PDF analysis, and direct tool call examples.
 
-#### 7. Production Utilities
+#### 7. Figma Plugin (`figma-plugin/`)
+
+**Purpose:** Figma design tool integration for extracting HVAC measurements directly from drawings and generating insulation estimates without leaving Figma.
+
+**Architecture:**
+- **Sandbox (`code.ts`):** Runs in the Figma main thread with scene graph access. Handles node traversal, measurement extraction, annotation layers, and SVG export.
+- **UI (`ui.tsx`):** React-based tabbed interface running in an iframe. Four tabs: Extract, Estimate, Quote, Settings.
+- **Measurement Extractor (`utils/measurementExtractor.ts`):** Classifies Figma nodes as HVAC elements by layer-name keywords, converts geometry to real-world units using configurable drawing scales.
+- **Estimation Service (`services/estimationService.ts`):** Dual-mode estimation — local built-in engine (offline-capable) or remote API connecting to the Python backend.
+
+**Key Features:**
+- Automatic HVAC element detection from Figma layer names (duct, pipe, equipment keywords)
+- Configurable drawing scale presets (1/4" = 1'-0", 1/8" = 1'-0", custom)
+- Fitting detection from sibling node names (elbows, tees, reducers)
+- Visual insulation annotation overlay on Figma elements
+- Quote generation with material/labor breakdown and cost alternatives
+- SVG export of annotated drawings
+- Works offline with local estimation engine; optionally connects to backend API
+
+**Communication:** Uses `postMessage` between sandbox and UI iframe with typed message contracts (`UIToPluginMessage`, `PluginToUIMessage`).
+
+#### 8. Production Utilities
 
 **Caching (`utils_cache.py`):**
 - `FileCache` class with file-based caching
@@ -739,6 +777,9 @@ python claude_estimation_agent.py
 # React web app
 npm install
 npm run dev
+
+# Figma plugin (development)
+cd figma-plugin && npm install && npm run dev
 
 # Workflow example
 python workflow_simple_example.py
@@ -1150,6 +1191,43 @@ response = skill.run("I need insulation for a 24-inch supply duct")
 # Or integrate into another agent as a tool
 ```
 
+### Task 9: Using the Figma Plugin
+
+```bash
+# 1. Build the plugin
+cd figma-plugin
+npm install
+npm run build
+
+# 2. In Figma Desktop:
+#    Plugins → Development → Import plugin from manifest...
+#    Select figma-plugin/manifest.json
+
+# 3. Usage within Figma:
+#    - Open a drawing with HVAC layers named using keywords
+#      (e.g., "24x20 Supply Duct", "2\" CHW Pipe", "AHU-1")
+#    - Run the plugin: Plugins → Pro Insulation Estimator
+#    - Set the drawing scale on the Extract tab
+#    - Click "Extract All from Page" or select elements first
+#    - Review measurements, configure pricing on the Estimate tab
+#    - Generate a quote and export
+```
+
+```typescript
+// Programmatic use of the estimation service (outside Figma)
+import { estimateLocally, buildEstimationRequest } from './services/estimationService';
+
+const request = buildEstimationRequest(
+  { projectName: 'Building A', location: 'Denver', customer: 'ACME', date: '2026-02-19', quoteNumber: '' },
+  measurements,  // FigmaMeasurement[]
+  { figmaUnitsPerFoot: 24, label: '1/4" = 1\'-0"' },
+  { materialMarkup: 15, laborMarkup: 10, overheadProfit: 15, contingency: 10, laborRate: 85, includeAlternatives: true }
+);
+
+const result = estimateLocally(request);
+console.log(`Grand Total: $${result.grandTotal}`);
+```
+
 ---
 
 ## File Organization
@@ -1192,6 +1270,16 @@ response = skill.run("I need insulation for a 24-inch supply duct")
 | `estimator.ts` | Estimation logic | 269 | TypeScript calculation engine |
 | `types.ts` | Type definitions | 101 | TypeScript interfaces |
 | `constants.ts` | Pricing constants | 79 | Pricing data, labor rates |
+
+### Figma Plugin (`figma-plugin/`)
+
+| File | Purpose | Key Exports |
+|------|---------|-------------|
+| `src/code.ts` | Figma sandbox (main thread) | Scene graph access, node traversal, annotation |
+| `src/ui.tsx` | Plugin UI (React) | Tabbed interface: Extract, Estimate, Quote, Settings |
+| `src/types.ts` | Plugin type definitions | `FigmaMeasurement`, `EstimationResult`, message types |
+| `src/services/estimationService.ts` | Estimation engine | `estimateLocally()`, `estimateViaAPI()` |
+| `src/utils/measurementExtractor.ts` | Node classification | `extractMeasurements()`, `classifyNode()` |
 
 ### Test Files
 
@@ -1519,6 +1607,10 @@ python claude_estimation_agent.py      # CLI interface
 # React frontend
 npm install && npm run dev             # Development
 npm run build                          # Production build
+
+# Figma plugin
+cd figma-plugin && npm install && npm run build  # Build plugin
+cd figma-plugin && npm run dev                   # Watch mode
 ```
 
 ### Key Files to Modify
@@ -1531,6 +1623,7 @@ npm run build                          # Production build
 - **Add GCP service:** Follow pattern in `cloud_config.py` / `gcs_storage.py`
 - **Add workflow stage:** `claude_workflow_enhancement.py`
 - **Create embeddable skill:** `hvac_insulation_skill.py`
+- **Modify Figma plugin:** `figma-plugin/src/` (code.ts, ui.tsx, services/, utils/)
 
 ### Getting Help
 
