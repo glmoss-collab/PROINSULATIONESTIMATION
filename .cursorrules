@@ -1,0 +1,27 @@
+# PROINSULATIONESTIMATION — Guaranteed Insulation Inc.
+
+This is the canonical **PROINSULATIONESTIMATION** system for **Guaranteed Insulation Inc.** (HVAC mechanical insulation contractor, Athens, GA).
+
+## Stack
+- **Backend:** Python (estimation engine, agents, PDF tools)
+- **Frontend:** Streamlit and React/TypeScript (Vite)
+- **Pricing:** Environment pricebook (`pricebook_sample.json`); load via `PricingEngine._load_prices()` in `hvac_insulation_estimator.py`. Roadmap: BigQuery for materials, labor rates, production rates.
+- **Deployment:** GCP Cloud Run (Docker, Cloud Build). See `GCP_DEPLOYMENT.md`, `deploy.sh`, `Dockerfile`, `cloudbuild.yaml`.
+
+## Key files
+- **Estimation core:** `hvac_insulation_estimator.py` — `PricingEngine`, `ProjectQuote`, `MaterialItem`, `MeasurementItem`, `InsulationSpec`; use only pricebook keys, no invented prices.
+- **Bid package (GI):** `guaranteed_insulation_app.py` (Streamlit), `guaranteed_insulation_scope.py` (scope filter), `guaranteed_insulation_bid_package.py` (executive summary, financial breakdown, branding).
+- **Agent estimation:** `agent_estimation_app.py`, `claude_estimation_agent.py`, `claude_agent_tools.py` — conversational estimation and tools.
+- **Other apps:** `estimation_app.py`, `streamlit_app.py` — alternate Streamlit UIs.
+- **PDF / specs:** `gemini_pdf_extractor.py`, `process_my_pdfs.py`, `utils_pdf.py`; Pydantic spec models in `pydantic_models.py`.
+
+## Conventions
+- **Quotes and pricing:** Use existing `ProjectQuote` and related dataclasses from `hvac_insulation_estimator.py`. Do not invent unit prices; use only keys present in the pricebook or in `PricingEngine._load_prices()`.
+- **Scope:** External duct wrap, HVAC piping, equipment, kitchen exhaust fireproofing (3M), weatherproofing. Exclude duct liner, waste/sanitary plumbing, fire sprinkler. See `.cursor/rules/hvac-commercial-cost-estimation.mdc` and `skills/cursor-commercial-cost-estimation.md` for mapping scope to price keys and quote format.
+- **Deployment:** Follow Google Cloud best practices; use Secret Manager for API keys; document steps in `GCP_DEPLOYMENT.md` or `deployment/` when adding new services.
+
+## Project layout (target)
+- Root: apps, agents, and top-level scripts (current).
+- `tests/`: unit and integration tests.
+- `deployment/`: `GCP_DEPLOYMENT.md`, `deploy.sh`, `docker-compose.yml` (can be consolidated here over time).
+- Prefer feature branches over duplicate project folders; use this repo as the single source of truth.

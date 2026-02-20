@@ -1,0 +1,88 @@
+==============================================================================
+  GUARANTEED INSULATION INC.
+  FORMAL BID PACKAGE — EXTERNAL HVAC / MECHANICAL INSULATION
+==============================================================================
+
+  Project:        {{PROJECT_NAME}}
+  Bid/Quote No.:  {{QUOTE_NUMBER}}
+  Date:           {{DATE}}
+
+==============================================================================
+
+1. SCOPE OF WORK (EXECUTIVE SUMMARY)
+   ======================================================================
+
+   Guaranteed Insulation Inc. proposes to furnish and install external HVAC
+   and mechanical insulation as outlined in this bid. This proposal covers
+   the following scope:
+
+   INCLUDED:
+   * External duct wrap and ductwork insulation (supply, return, exhaust, OA)
+   * HVAC piping insulation (chilled water, hot water, condenser water,
+     steam, condensate) with specified jacketing and vapor barrier
+   * Equipment insulation (AHUs, FCUs, boilers, chillers, tanks) where
+     specified
+   * Kitchen exhaust / grease duct fireproofing and weatherproofing where
+     specified
+   * Weatherproofing and jacketing for exterior systems (aluminum or PVC
+     as specified)
+
+   EXCLUDED (not included in this bid):
+   * Duct liner and internal acoustic liner
+   * Waste, sanitary, or domestic plumbing insulation
+   * Fire sprinkler piping (non-mechanical)
+   * Any scope not explicitly listed above
+
+   {{SCOPE_FILTER_SUMMARY}}
+
+   Total bid reflects materials, labor, and {{CONTINGENCY_PERCENT}}%
+   contingency.
+
+2. FINANCIAL BREAKDOWN
+   ======================================================================
+
+   MATERIALS BY CATEGORY
+   ----------------------------------------------------------------------
+   {{#EACH CATEGORY}}
+   {{CATEGORY_NAME}}                                     ${{CATEGORY_TOTAL}}
+   {{/EACH}}
+
+   Materials Subtotal                                    ${{MATERIALS_TOTAL}}
+
+   LABOR
+   ----------------------------------------------------------------------
+   Labor: {{LABOR_HOURS}} hours @ ${{LABOR_RATE}}/hr     ${{LABOR_TOTAL}}
+
+   SUMMARY
+   ----------------------------------------------------------------------
+   Materials                                             ${{MATERIALS_TOTAL}}
+   Labor                                                 ${{LABOR_TOTAL}}
+   Subtotal                                              ${{SUBTOTAL}}
+   Contingency ({{CONTINGENCY_PERCENT}}%)                ${{CONTINGENCY_AMOUNT}}
+   ----------------------------------------------------------------------
+   TOTAL BID                                             ${{TOTAL}}
+
+3. MATERIAL SCHEDULE (LINE ITEMS)
+   ======================================================================
+
+   Description                                          Qty      Unit       Total
+   ----------------------------------------------------------------------
+   {{#EACH MATERIAL}}
+   {{DESCRIPTION}}                                {{QTY}}  {{UNIT}}  ${{TOTAL}}
+   {{/EACH}}
+
+4. TERMS AND NOTES
+   ======================================================================
+
+   {{#EACH NOTE}}
+   {{INDEX}}. {{NOTE_TEXT}}
+   {{/EACH}}
+
+   This bid is valid for 30 days from the date of issue. Work shall be
+   performed in accordance with project specifications and applicable
+   codes. Final quantities subject to field verification.
+
+==============================================================================
+  GUARANTEED INSULATION INC.
+  External HVAC and mechanical insulation only.
+==============================================================================
