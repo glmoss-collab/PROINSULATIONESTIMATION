@@ -44,7 +44,7 @@ class HVACInsulationSkill:
 
     Attributes:
         client: Anthropic API client
-        model: Claude model to use (default: claude-sonnet-4-5-20250929)
+        model: Claude model to use (default: claude-opus-4-5-20251101)
         tools: Dictionary of available tool functions
         tool_schemas: OpenAPI schemas for tool definitions
         session_data: Storage for extracted data across tool calls
@@ -54,7 +54,7 @@ class HVACInsulationSkill:
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "claude-sonnet-4-5-20250929",
+        model: str = "claude-opus-4-5-20251101",
         max_tokens: int = 8192
     ):
         """
