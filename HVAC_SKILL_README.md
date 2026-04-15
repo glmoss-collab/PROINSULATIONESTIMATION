@@ -306,7 +306,7 @@ skill.reset_session()
 ```python
 skill = HVACInsulationSkill(
     api_key="your-api-key",
-    model="claude-sonnet-4-5-20250929",  # Default
+    model="claude-opus-4-5-20251101",  # Default
     max_tokens=8192
 )
 ```
@@ -542,6 +542,10 @@ For issues or questions:
 
 ## Version History
 
+- **1.1.0** (2026-04-15): Model alignment update
+  - Default model upgraded to Claude Opus 4.5 (`claude-opus-4-5-20251101`)
+    to match the primary model used across the rest of the codebase and
+    documented in `CLAUDE.md`
 - **1.0.0** (2025-11-12): Initial release
   - 7 core tools
   - Complete estimation workflow
