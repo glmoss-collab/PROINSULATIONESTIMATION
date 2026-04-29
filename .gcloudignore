@@ -1,0 +1,90 @@
+# =============================================================================
+# .gcloudignore — files NOT uploaded to Cloud Build
+# =============================================================================
+# This file uses .gitignore syntax. Anything matched here is excluded from
+# `gcloud builds submit` and `gcloud run deploy --source` uploads.
+# Keeps the build context small (faster builds, no secrets shipped).
+# =============================================================================
+
+# Honor .gitignore as well
+#!include:.gitignore
+
+# Git
+.git/
+.github/
+.gitignore
+
+# Editors / IDE
+.vscode/
+.idea/
+.cursor/
+.cursorrules
+.devcontainer/
+.claude/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+venv/
+env/
+ENV/
+.venv/
+
+# Node (frontend assets aren't needed in Cloud Run image)
+node_modules/
+dist/
+dist-ssr/
+package-lock.json
+
+# Secrets — never ship these
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.pem
+*.key
+service-account*.json
+credentials*.json
+
+# Large reference / data files (not needed at runtime)
+*.pdf
+*.zip
+google_ai_studio_package.zip
+!measurements_template.csv
+!pricebook_sample.json
+
+# Generated runtime artifacts
+quote*.txt
+material*.txt
+*.tmp
+*.temp
+*.log
+logs/
+
+# Docs (kept in repo, not needed in image)
+*.md
+!README.md
+
+# Tests run in Cloud Build step 1 from a separate context; keep them
+# in the build context so the test step can read them
+# (do NOT ignore tests/)
+
+# Local-only utilities
+run.bat
+run.sh
+demo_agent.py
+test_easiest_workflow.py
+process_my_pdfs.py
+google_ai_studio_package.zip
+figma-plugin/
