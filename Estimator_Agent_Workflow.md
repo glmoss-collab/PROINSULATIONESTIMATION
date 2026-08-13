@@ -1,5 +1,12 @@
 # Estimator & Quote Manager Workflow (GitHub-Integrated)
 
+> **Read this first:** Gmail/Dropbox connectors described below are **not
+> implemented**. Asking a vision model to estimate linear feet from rasterized
+> drawings will not produce a bid Guaranteed Insulation can stand behind.
+> For the recommended inbox → schedule/vector takeoff → human review → GI bid
+> path, and a gap list of what the model is missing, see
+> `INTAKE_TAKEOFF_AND_BID_ARCHITECTURE.md`.
+
 This expanded manual augments the original Agent‑Builder walkthrough with the
 Python and Streamlit utilities that already live in this repository. Follow the
 steps below to wire the OpenAI workflow directly into the estimation code so
