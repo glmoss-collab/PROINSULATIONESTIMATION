@@ -1,0 +1,175 @@
+==============================================================================
+  GUARANTEED INSULATION INC.
+  FORMAL BID PACKAGE — EXTERNAL HVAC / MECHANICAL INSULATION
+==============================================================================
+
+  Project:        MPA Gwinnett / Lawrenceville MOB
+  Address:        Walther Road, Lawrenceville, GA
+  Engineer:       Jordan & Skala  |  Architect: RJTR
+  Project No.:    25-115.00
+  Documents:      Mech drawings M0-00–M0-04, M2-01–M2-06 (DD 6/12/26)
+                  Spec Section 230700 HVAC Insulation
+  Bid/Quote No.:  GI-LMOB-20260813
+  Date:           2026-08-13
+  Set status:     DESIGN DEVELOPMENT — not issued for construction
+
+==============================================================================
+
+1. SCOPE OF WORK (EXECUTIVE SUMMARY)
+   ======================================================================
+
+   Base building HVAC insulation for three packaged gas/electric RTUs
+   (RTU-1 56,000 CFM L1–L2; RTU-2 56,000 CFM L3–L4; RTU-3 27,000 CFM L5)
+   plus two elevator RTUs, east/west shaft risers, core mains, and roof
+   condensate. Five occupied floors; roof at 72' above Level 1.
+
+   INCLUDED (Guaranteed Insulation Inc.):
+   • Type 1 2" FSK duct wrap on interior SA/RA shaft risers and core mains
+     after the 15' acoustical-liner zone at each RTU
+   • Relief duct at RH-R.1 (exterior to 18" past damper)
+   • 1" elastomeric on RTU condensate piping on the roof
+   • ALTERNATE: 3" Type 2 wrap + aluminum jacket on roof SA/RA
+     (spec primary is 2" liner board by sheet metal; this alternate is
+     230700 2.05.A.2 / M0-01 exterior insulation option)
+
+   EXCLUDED:
+   • Duct liner / acoustical liner (15' from RTU and VAV) — sheet metal
+   • Factory-insulated flex duct (R-6 / R-8)
+   • Toilet / janitor exhaust (M0-01: do not insulate unless noted)
+   • Tenant VAV/PIU distribution — not designed (VAV schedule is blank)
+   • Domestic water, waste, fire sprinkler
+   • 2-hour fire wrap at smokeproof-enclosure penetrations (clarify)
+   • Equipment casings, RTU internals, gas vents
+
+2. HOW LARGE-DUCT SF WAS CALCULATED
+   ======================================================================
+
+   Rectangular (correct):  SF = 2 × (W + H + 2t) / 12 × LF
+   Example 86" × 56" with 2" wrap:  2×(86+56+4)/12 = 24.33 SF per LF
+   The estimator engine's old parser treated "86x56" as 86" ROUND
+   (π×86/12 ≈ 22.5 SF/LF) and ignored the second dimension. Not used.
+   Fittings: +15% SF on horizontal, +8% SF on vertical risers.
+   Scale: 1/8" = 1'-0" on M2 sheets (1 PDF point = 1/9 foot).
+
+3. FINANCIAL BREAKDOWN
+   ======================================================================
+
+   Interior wrap SF (Type 1):       11,485.5 SF
+   Roof exterior SF (alternate):     5,136.7 SF
+   Condensate:                         150.0 LF
+
+   MATERIALS
+   2" FSK duct wrap (Type 1) — interior shafts, core, r  11485.5 SF    $15,074.72
+   3" FSK duct wrap (Type 2) — roof exterior ALTERNATE    5136.7 SF    $10,113.13
+   Aluminum jacket — roof exterior ALTERNATE              5136.7 SF    $41,093.60
+   Mastic / vapor seal — roof jacket seams                5136.7 SF     $3,338.86
+   1" elastomeric — RTU condensate on roof (5 units × 3    150.0 LF       $615.00
+
+   Materials (pricebook, raw)                           $70,235.31
+   Materials after 15% markup                           $80,770.61
+   Labor 1669.5 hrs @ $65.00/hr (incl 20% OH)   $108,514.82
+   Subtotal                                            $189,285.43
+   Contingency (10%)                                    $18,928.54
+   ----------------------------------------------------------------------
+   TOTAL with roof exterior ALTERNATE                  $208,213.97
+   BASE (interior wrap + condensate only)               $68,697.64
+   Exterior alternate adder                            $139,516.33
+
+4. TAKEOFF LINES (IN SCOPE)
+   ======================================================================
+   ID                               Size          LF        SF   Bill SF
+   ----------------------------------------------------------------------
+   L1-RISER-1-60x24                 60x24       15.0     220.0     237.6
+   L1-HORIZ-1-60x24                 60x24       30.0     440.0     506.0
+   L1-RISER-2-54x24                 54x24       15.0     205.0     221.4
+   L1-HORIZ-2-54x24                 54x24       30.0     410.0     471.5
+   L2-RISER-1-60x24                 60x24       14.0     205.3     221.8
+   L2-HORIZ-1-60x24                 60x24       30.0     440.0     506.0
+   L2-RISER-2-54x24                 54x24       14.0     191.3     206.6
+   L2-HORIZ-2-54x24                 54x24       30.0     410.0     471.5
+   L3-RISER-1-90x28                 90x28       14.0     284.7     307.4
+   L3-HORIZ-1-90x28                 90x28       30.0     610.0     701.5
+   L3-RISER-2-88x26                 88x26       14.0     275.3     297.4
+   L3-HORIZ-2-88x26                 88x26       30.0     590.0     678.5
+   L3-RISER-3-78x30                 78x30       14.0     261.3     282.2
+   L3-HORIZ-3-78x30                 78x30       30.0     560.0     644.0
+   L3-RISER-4-86x30                 86x30       14.0     280.0     302.4
+   L3-HORIZ-4-86x30                 86x30       30.0     600.0     690.0
+   L4-RISER-1-90x28                 90x28       14.0     284.7     307.4
+   L4-HORIZ-1-90x28                 90x28       30.0     610.0     701.5
+   L4-RISER-2-88x26                 88x26       14.0     275.3     297.4
+   L4-HORIZ-2-88x26                 88x26       30.0     590.0     678.5
+   L4-RISER-3-70x36                 70x36       14.0     256.7     277.2
+   L4-HORIZ-3-70x36                 70x36       30.0     550.0     632.5
+   L4-RISER-4-78x36                 78x36       14.0     275.3     297.4
+   L4-HORIZ-4-78x36                 78x36       30.0     590.0     678.5
+   L5-RISER-1-56x24                 56x24       15.0     210.0     226.8
+   L5-HORIZ-1-56x24                 56x24       30.0     420.0     483.0
+   L5-RISER-2-56x38                 56x38       15.0     245.0     264.6
+   L5-HORIZ-2-56x38                 56x38       30.0     490.0     563.5
+   L5-RISER-3-58x40                 58x40       15.0     255.0     275.4
+   L5-HORIZ-3-58x40                 58x40       30.0     510.0     586.5
+   RTU-1-LINER-DEDUCT-60x24         60x24      -15.0    -220.0    -237.6
+   RTU-1-LINER-DEDUCT-54x24         54x24      -15.0    -205.0    -221.4
+   RTU-2-LINER-DEDUCT-90x28         90x28      -15.0    -305.0    -329.4
+   RTU-2-LINER-DEDUCT-88x26         88x26      -15.0    -295.0    -318.6
+   RTU-3-LINER-DEDUCT-56x38         56x38      -15.0    -245.0    -264.6
+   RTU-3-LINER-DEDUCT-58x40         58x40      -15.0    -255.0    -275.4
+   ROOF-RTU-1-SA-86x56              86x56       36.0     888.0    1021.2
+   ROOF-RTU-1-RA-78x56              78x56       32.0     746.7     858.7
+   ROOF-RTU-2-SA-56x78              56x78       33.0     770.0     885.5
+   ROOF-RTU-2-RA-56x86              56x86       35.0     863.3     992.8
+   ROOF-RTU-3-SA-56x38              56x38       28.0     466.7     536.7
+   ROOF-RTU-3-RA-58x40              58x40       28.0     485.3     558.1
+   ROOF-RTU-R.ELEV1-SA-16x14        16x14       12.0      72.0      82.8
+   ROOF-RTU-R.ELEV1-RA-14x14        14x14       12.0      68.0      78.2
+   ROOF-RTU-R.ELEV2-SA-14x12        14x12       10.0      53.3      61.3
+   ROOF-RTU-R.ELEV2-RA-14x12        14x12       10.0      53.3      61.3
+   RH-R.1-RELIEF                    42x30        8.0     101.3     116.5
+
+5. EXCLUDED LINES (shown, not priced)
+   ======================================================================
+   L1-EXH-12x10                     12x10      15.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L1-EXH-16x10                     16x10      12.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L1-EXH-8Ø                        8Ø         20.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L1-EXH-6Ø                        6Ø         40.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L2-EXH-12x10                     12x10      15.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L2-EXH-10x10                     10x10      12.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L2-EXH-8Ø                        8Ø         20.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L2-EXH-6Ø                        6Ø         40.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L3-EXH-12x10                     12x10      15.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L3-EXH-10x10                     10x10      12.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L3-EXH-8Ø                        8Ø         20.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L3-EXH-6Ø                        6Ø         40.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L4-EXH-12x10                     12x10      15.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L4-EXH-10x10                     10x10      12.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L4-EXH-8Ø                        8Ø         20.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L4-EXH-6Ø                        6Ø         40.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L5-EXH-12x10                     12x10      15.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L5-EXH-10x10                     10x10      12.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L5-EXH-8Ø                        8Ø         20.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+   L5-EXH-6Ø                        6Ø         40.0 LF  M0-01 Air Distribution note 8: exhaust shall not
+
+6. TERMS, ASSUMPTIONS, CLARIFICATIONS
+   ======================================================================
+   1. DD set — VAV-1-1 through VAV-3-4 are scheduled with no CFM/inlet.
+      Tenant medium-pressure mains and VAV runouts are NOT on the plans
+      and are not in this number. Add by change order when issued.
+   2. Floor-to-floor from M0-04: 15'/14'/14'/14'/15' (L1→roof = 72').
+   3. Core horizontal LF = 30' per tagged main (plan measure at 1/8").
+   4. Roof LF from RTU tag to size tag at drawing scale.
+   5. Pricebook has no fiberglass_3.0; 3" wrap uses 2.0 × 3/2.
+   6. Wrap $/SF = fiberglass_2.0 per LF ÷ 4 SF (12×12 duct). Large
+      ducts are billed on SF, not a flat $/LF.
+   7. Labor is SF-based (0.045 hr/SF indoor wrap, 0.06 outdoor,
+      0.10 jacket). Stock engine 0.45 hr/LF understates 86x56.
+   8. Confirm who furnishes roof liner vs Alumaguard before award.
+   9. Confirm 2-hour wrap at stair/smokeproof penetrations.
+  10. Bid valid 30 days. Quantities subject to IFC set and field verify.
+  11. No hydronic CHW/HW mains appear on this DD mechanical set;
+      CWS/CWR exist only in the legend. None taken off.
+
+==============================================================================
+  GUARANTEED INSULATION INC.
+  External HVAC and mechanical insulation only.
+==============================================================================
