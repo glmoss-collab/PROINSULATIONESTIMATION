@@ -1,5 +1,11 @@
 # Estimator & Quote Manager Workflow (GitHub-Integrated)
 
+> **Read this first:** Gmail/Dropbox connectors described below are **not
+> implemented** and are **not the current priority**. If you can upload
+> mechanical plans and specs as PDFs, see `TAKEOFF_ACCURACY.md` for what the
+> file and the extractor must do before quantities are bid-ready. Broader gap
+> list: `INTAKE_TAKEOFF_AND_BID_ARCHITECTURE.md`.
+
 This expanded manual augments the original Agent‑Builder walkthrough with the
 Python and Streamlit utilities that already live in this repository. Follow the
 steps below to wire the OpenAI workflow directly into the estimation code so
