@@ -1,10 +1,9 @@
 # Inbox → Takeoff → Guaranteed Insulation Bid
 
 **Audience:** Guaranteed Insulation Inc. (Athens, GA)  
-**Question:** What is the best route from a Gmail bid invite + Dropbox plan set to an accurate commercial HVAC insulation bid?  
-**This document:** Honest review of what the repo can do today, the recommended pipeline, and everything a model (or estimator) is missing before it can bid a real job.
+**Status:** Inbox / Gmail / Dropbox intake is **deferred**. If you can upload the PDFs yourself, use `TAKEOFF_ACCURACY.md` — that is the path that matters for a bid.
 
-This is **not** a hosting or model-vendor recommendation. Treat vision models as assistants. Treat takeoff quantities, scope rules, and unit prices as deterministic systems with a human checkpoint.
+This document is the earlier end-to-end review (including connectors). Do not implement the inbox pipeline until takeoff from an uploaded set is accurate.
 
 ---
 

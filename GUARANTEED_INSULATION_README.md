@@ -2,7 +2,7 @@
 
 This workflow lets you **upload commercial mechanical drawings and specification PDFs** and receive a **formal bid package** with an **executive summary of scope of work** and a **financial breakdown**, branded for **Guaranteed Insulation Inc.**
 
-For Gmail inbox triage, Dropbox plan-set intake, and what is still missing before a model can take off duct/pipe accurately, see `INTAKE_TAKEOFF_AND_BID_ARCHITECTURE.md`.
+For what an uploaded mechanical PDF must contain and what the extractor must do for an accurate takeoff, see `TAKEOFF_ACCURACY.md`.
 
 ## Scope
 
