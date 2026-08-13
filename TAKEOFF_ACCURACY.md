@@ -2,6 +2,8 @@
 
 **Assumption:** You can upload the plan set and specs yourself. Inbox / Gmail / Dropbox is out of scope.
 
+**To run the next job the same way:** `estimates/REPEAT_TAKEOFF.md` (venv or Cursor Cloud + `scripts/inventory_mech_pdfs.py`).
+
 **Goal:** Linear feet, sizes, fittings, and insulation rules that are close enough to bid — then the existing `PricingEngine` can price them.
 
 This is what has to be true of the **PDF**, the **extractor**, and the **estimator review**. If any of the three is missing, the bid is a guess.
