@@ -812,40 +812,52 @@ def calculate_pricing(
         Complete pricing breakdown with materials, labor, and totals
     """
     try:
-        # Initialize pricing engine
+        # Initialize pricing engine (PricingEngine takes a multiplier, not a percent)
         engine = PricingEngine(
             pricebook=pricebook,
-            markup_percent=markup_percent,
-            labor_rate=labor_rate
+            markup=1.0 + markup_percent / 100.0,
+            labor_rate=labor_rate,
         )
 
-        # Calculate materials and labor
-        material_items = []
-        total_labor_hours = 0.0
-
-        for measurement in measurements:
-            # Find matching specification
-            system_type = measurement.get("system_type")
-            matching_spec = next(
-                (s for s in specifications if s.get("system_type") == system_type),
-                None
+        spec_objs = [
+            InsulationSpec(
+                system_type=s.get("system_type", ""),
+                size_range=s.get("size_range", "") or "",
+                thickness=float(s.get("thickness", 0) or 0),
+                material=s.get("material", "") or "",
+                facing=s.get("facing") or None,
+                special_requirements=list(s.get("special_requirements") or []),
+                location=s.get("location") or "indoor",
             )
-
-            if not matching_spec:
-                continue
-
-            # Calculate for this item
-            result = engine.calculate_item(
-                measurement=measurement,
-                specification=matching_spec
+            for s in specifications
+        ]
+        measurement_objs = [
+            MeasurementItem(
+                item_id=str(m.get("item_id", f"M-{i + 1}")),
+                system_type=m.get("system_type", ""),
+                size=str(m.get("size", "")),
+                length=float(m.get("length", 0) or 0),
+                location=m.get("location") or "indoor",
+                fittings=dict(m.get("fittings") or {}),
             )
+            for i, m in enumerate(measurements)
+        ]
 
-            material_items.extend(result["materials"])
-            total_labor_hours += result["labor_hours"]
+        materials = engine.calculate_materials(measurement_objs, spec_objs)
+        total_labor_hours, labor_cost = engine.calculate_labor(materials)
+        material_items = [
+            {
+                "description": item.description,
+                "unit": item.unit,
+                "quantity": round(item.quantity, 2),
+                "unit_price": round(item.unit_price, 2),
+                "total_price": round(item.total_price, 2),
+                "category": item.category,
+            }
+            for item in materials
+        ]
 
-        # Calculate totals
         material_subtotal = sum(item["total_price"] for item in material_items)
-        labor_cost = total_labor_hours * labor_rate
         subtotal = material_subtotal + labor_cost
 
         # Apply contingency (default 10%)
@@ -864,6 +876,7 @@ def calculate_pricing(
             "contingency_percent": contingency_percent,
             "contingency": round(contingency, 2),
             "total": round(total, 2),
+            "warnings": engine.warnings,
             "summary": f"${round(total, 2):,.2f} ({len(material_items)} line items, {round(total_labor_hours, 1)} labor hours)"
         }
 

@@ -14,6 +14,7 @@ This framework provides:
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -53,6 +54,8 @@ except Exception:
 
 import pdfplumber
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class InsulationSpec:
@@ -91,6 +94,7 @@ class MaterialItem:
     unit_price: float
     total_price: float
     category: str  # "insulation", "jacket", "mastic", "accessories"
+    system_type: str = ""  # "duct" / "pipe" of the run this item belongs to (drives labor rates)
 
 
 @dataclass
@@ -409,11 +413,33 @@ class DrawingMeasurementExtractor:
 class PricingEngine:
     """Calculate material quantities and pricing."""
 
-    def __init__(self, price_book_path: Optional[str] = None, markup: float = 1.0) -> None:
+    # Extra insulated length (LF) added per fitting. Additive, not a multiplier of the run:
+    # a 100 LF main with 2 elbows is 100 + 2 x allowance, never 200 LF.
+    # PLACEHOLDER shop rule - confirm against your own fitting allowance chart.
+    DEFAULT_FITTING_ALLOWANCE_LF: Dict[str, float] = {"elbow": 1.5, "tee": 2.5}
+
+    DEFAULT_LABOR_RATE = 65.0  # $/hr - single source of truth for the engine
+
+    def __init__(
+        self,
+        price_book_path: Optional[str] = None,
+        markup: float = 1.0,
+        labor_rate: float = DEFAULT_LABOR_RATE,
+        fitting_allowance_lf: Optional[Dict[str, float]] = None,
+        pricebook: Optional[Dict[str, float]] = None,
+    ) -> None:
         self.markup = markup
+        self.labor_rate = labor_rate
+        self.fitting_allowance_lf = dict(self.DEFAULT_FITTING_ALLOWANCE_LF)
+        if fitting_allowance_lf:
+            self.fitting_allowance_lf.update(fitting_allowance_lf)
+        # Problems found during the last calculate_materials() call (missing price keys, etc.)
+        self.warnings: List[str] = []
         # _file_defaults may contain supplier-provided defaults (e.g., markup_percent)
         self._file_defaults: Dict[str, Any] = {}
         self.prices = self._load_prices(price_book_path)
+        if pricebook:
+            self.prices.update({str(k).strip().lower().replace(" ", "_"): float(v) for k, v in pricebook.items()})
         self.labor_rates = {
             "duct_insulation": 0.45,  # hours per linear foot
             "pipe_insulation": 0.35,
@@ -454,13 +480,13 @@ class PricingEngine:
                     normalized: Dict[str, float] = {}
                     for k, v in raw.items():
                         try:
-                            normalized[str(k)] = float(v)
+                            normalized[str(k).strip().lower().replace(" ", "_")] = float(v)
                         except Exception:
                             # ignore non-numeric entries
                             continue
                     return normalized
             except Exception as e:
-                print(f"Warning: unable to load price book {price_book_path}: {e}")
+                logger.warning("Unable to load price book %s: %s", price_book_path, e)
 
         # Default prices (would load from file/database in production)
         return {
@@ -497,88 +523,243 @@ class PricingEngine:
         }
 
     def calculate_materials(self, measurements: List[MeasurementItem], specs: List[InsulationSpec]) -> List[MaterialItem]:
-        """Calculate material quantities from measurements and specs."""
+        """Calculate material quantities from measurements and specs.
 
+        Lines that cannot be priced (no matching spec, missing price-book key) are never
+        silently dropped or priced with an invented number: they are emitted as $0 lines
+        prefixed ``[UNPRICED]`` and recorded in ``self.warnings``.
+        """
+
+        self.warnings = []
         materials: List[MaterialItem] = []
 
         for measurement in measurements:
             # Find applicable spec
             spec = self._find_applicable_spec(measurement, specs)
 
-            if spec:
-                # Calculate insulation material
-                insulation = self._calculate_insulation(measurement, spec)
-                materials.append(insulation)
+            if not spec:
+                self.warnings.append(
+                    f"{measurement.item_id}: no matching specification for {measurement.system_type} "
+                    f"'{measurement.size}' ({measurement.location}) - not priced"
+                )
+                continue
 
-                # Calculate facing/jacket
-                if spec.facing or "aluminum_jacket" in spec.special_requirements:
-                    jacket = self._calculate_jacketing(measurement, spec)
-                    materials.append(jacket)
+            # Calculate insulation material
+            materials.append(self._calculate_insulation(measurement, spec))
 
-                # Calculate mastic
-                if "mastic_coating" in spec.special_requirements:
-                    mastic = self._calculate_mastic(measurement, spec)
-                    materials.append(mastic)
+            # Calculate facing/jacket
+            if spec.facing or "aluminum_jacket" in spec.special_requirements:
+                materials.append(self._calculate_jacketing(measurement, spec))
 
-                # Calculate fittings/accessories
-                accessories = self._calculate_accessories(measurement, spec)
-                materials.extend(accessories)
+            # Calculate mastic
+            if "mastic_coating" in spec.special_requirements:
+                materials.append(self._calculate_mastic(measurement, spec))
+
+            # Calculate fittings/accessories
+            materials.extend(self._calculate_accessories(measurement, spec))
 
         return materials
 
-    def _find_applicable_spec(self, measurement: MeasurementItem, specs: List[InsulationSpec]) -> Optional[InsulationSpec]:
-        """Find the specification that applies to this measurement."""
+    # ------------------------------------------------------------------
+    # Spec matching
+    # ------------------------------------------------------------------
 
-        for spec in specs:
-            if spec.system_type == measurement.system_type:
-                # Could add size range checking here
-                return spec
+    def _find_applicable_spec(self, measurement: MeasurementItem, specs: List[InsulationSpec]) -> Optional[InsulationSpec]:
+        """Find the specification that applies to this measurement.
+
+        Candidates must share the system type. Among them, the spec whose size range
+        contains the measurement size wins; a spec whose range is unparseable ("all",
+        free text) matches any size but ranks below an explicit in-range spec. Ties are
+        broken by location, then by spec order.
+        """
+
+        candidates = [s for s in specs if s.system_type == measurement.system_type]
+        if not candidates:
+            return None
+
+        size = self._measurement_nominal_size(measurement)
+
+        def rank(spec: InsulationSpec) -> Optional[Tuple[int, int]]:
+            bounds = self._parse_size_range(spec.size_range)
+            if bounds is None or size is None:
+                size_score = 1  # unconstrained
+            elif bounds[0] <= size <= bounds[1]:
+                size_score = 0  # explicit hit
+            else:
+                return None  # explicit miss
+            location_score = 0 if spec.location == measurement.location else 1
+            return (size_score, location_score)
+
+        ranked = [(r, i, s) for i, s in enumerate(candidates) if (r := rank(s)) is not None]
+        if not ranked:
+            return None
+        return min(ranked, key=lambda t: (t[0], t[1]))[2]
+
+    # ------------------------------------------------------------------
+    # Size parsing
+    # ------------------------------------------------------------------
+
+    _NUM = r"\d+\s*[- ]\s*\d+/\d+|\d+/\d+|\d+(?:\.\d+)?"
+
+    @staticmethod
+    def _to_float(token: str) -> float:
+        """Parse '4', '2.5', '1/2' or '1-1/2' / '1 1/2' to a float."""
+
+        token = token.strip()
+        mixed = re.fullmatch(r"(\d+)\s*[- ]\s*(\d+)/(\d+)", token)
+        if mixed:
+            return int(mixed.group(1)) + int(mixed.group(2)) / int(mixed.group(3))
+        frac = re.fullmatch(r"(\d+)/(\d+)", token)
+        if frac:
+            return int(frac.group(1)) / int(frac.group(2))
+        return float(token)
+
+    def _parse_size(self, size: str) -> Tuple[str, Tuple[float, ...]]:
+        """Return ``("rect", (w, h))`` or ``("round", (d,))``; inches. Unparseable -> 12" round."""
+
+        text = (size or "").lower().replace("×", "x").replace('"', "").replace("in", "")
+        rect = re.fullmatch(rf"\s*({self._NUM})\s*x\s*({self._NUM})\s*(?:x.*)?", text)
+        if rect:
+            return "rect", (self._to_float(rect.group(1)), self._to_float(rect.group(2)))
+        num = re.search(self._NUM, text)
+        if num:
+            return "round", (self._to_float(num.group(0)),)
+        return "round", (12.0,)
+
+    def _parse_size_to_diameter(self, size: str) -> float:
+        """Nominal dimension in inches: diameter for round/pipe, the larger side for rectangular."""
+
+        _, dims = self._parse_size(size)
+        return max(dims)
+
+    def _measurement_nominal_size(self, measurement: MeasurementItem) -> Optional[float]:
+        if not re.search(r"\d", measurement.size or ""):
+            return None
+        return self._parse_size_to_diameter(measurement.size)
+
+    def _parse_size_range(self, size_range: str) -> Optional[Tuple[float, float]]:
+        """'4-12 inch' -> (4, 12); '1/2-2 inch' -> (0.5, 2); 'up to 6"' / '>12"' handled; else None."""
+
+        text = (size_range or "").lower().replace('"', "").replace("inches", "").replace("inch", "").replace("in.", "")
+        rng = re.search(rf"({self._NUM})\s*(?:-|to|–)\s*({self._NUM})", text)
+        if rng:
+            lo, hi = self._to_float(rng.group(1)), self._to_float(rng.group(2))
+            return (min(lo, hi), max(lo, hi))
+        upto = re.search(rf"(?:up to|under|<=?|through)\s*({self._NUM})", text)
+        if upto:
+            return (0.0, self._to_float(upto.group(1)))
+        over = re.search(rf"(?:over|above|>=?|larger than)\s*({self._NUM})", text)
+        if over:
+            return (self._to_float(over.group(1)), float("inf"))
         return None
+
+    def _surface_area_sf(self, measurement: MeasurementItem, spec: InsulationSpec, length_lf: float) -> float:
+        """Outside surface area of the insulated run.
+
+        Round/pipe: pi x (D + 2t) / 12 per LF. Rectangular duct: 2 x (W + H + 4t) / 12 per LF
+        (perimeter of the insulated outline), not a circle from the first number.
+        """
+
+        kind, dims = self._parse_size(measurement.size)
+        t = spec.thickness
+        if kind == "rect":
+            width, height = dims
+            perimeter_ft = 2 * (width + height + 4 * t) / 12
+        else:
+            perimeter_ft = np.pi * (dims[0] + 2 * t) / 12
+        return length_lf * perimeter_ft
+
+    # ------------------------------------------------------------------
+    # Quantities and pricing
+    # ------------------------------------------------------------------
+
+    def _insulated_length(self, measurement: MeasurementItem) -> float:
+        """Run length plus the additive allowance for each fitting."""
+
+        extra = sum(
+            count * self.fitting_allowance_lf.get(kind, 0.0)
+            for kind, count in (measurement.fittings or {}).items()
+        )
+        return measurement.length + extra
+
+    def _lookup_price(self, key: str) -> Optional[float]:
+        """Price-book lookup (no fallback). Returns None when the key is absent."""
+
+        key = key.strip().lower().replace(" ", "_")
+        return self.prices.get(key)
+
+    def _insulation_price_key(self, spec: InsulationSpec) -> Tuple[str, Optional[float]]:
+        """Try 'material_1.5' then 'material_1.50'-style spellings; return (first key tried, price)."""
+
+        material = spec.material.strip().lower().replace(" ", "_")
+        spellings = [f"{material}_{spec.thickness}", f"{material}_{spec.thickness:g}", f"{material}_{spec.thickness:.1f}"]
+        for key in spellings:
+            price = self._lookup_price(key)
+            if price is not None:
+                return key, price
+        return spellings[0], None
+
+    def _unpriced(self, description: str, unit: str, quantity: float, category: str, system_type: str, key: str,
+                  item_id: str) -> MaterialItem:
+        message = f"{item_id}: price book has no entry '{key}' - line left unpriced"
+        self.warnings.append(message)
+        logger.warning(message)
+        return MaterialItem(
+            description=f"[UNPRICED: {key}] {description}",
+            unit=unit,
+            quantity=quantity,
+            unit_price=0.0,
+            total_price=0.0,
+            category=category,
+            system_type=system_type,
+        )
 
     def _calculate_insulation(self, measurement: MeasurementItem, spec: InsulationSpec) -> MaterialItem:
         """Calculate insulation material quantity and cost."""
 
-        # Linear feet of insulation
-        quantity = measurement.length
+        quantity = self._insulated_length(measurement)
+        description = f"{spec.material.title()} Insulation {spec.thickness}\" - {measurement.size}"
 
-        # Add for fittings (rule of thumb: 1.5x for elbows, 2x for tees)
-        fitting_multiplier = 1.0
-        if measurement.fittings:
-            fitting_multiplier += measurement.fittings.get("elbow", 0) * 0.5
-            fitting_multiplier += measurement.fittings.get("tee", 0) * 1.0
+        price_key, base_price = self._insulation_price_key(spec)
+        if base_price is None:
+            return self._unpriced(description, "LF", quantity, "insulation", measurement.system_type,
+                                  price_key, measurement.item_id)
 
-        adjusted_quantity = quantity * fitting_multiplier
-
-        # Get price key
-        price_key = f"{spec.material}_{spec.thickness}"
-        unit_price = self.prices.get(price_key, 5.0) * self.markup  # apply markup
-
+        unit_price = base_price * self.markup
         return MaterialItem(
-            description=f"{spec.material.title()} Insulation {spec.thickness}\" - {measurement.size}",
+            description=description,
             unit="LF",
-            quantity=adjusted_quantity,
+            quantity=quantity,
             unit_price=unit_price,
-            total_price=adjusted_quantity * unit_price,
+            total_price=quantity * unit_price,
             category="insulation",
+            system_type=measurement.system_type,
         )
 
     def _calculate_jacketing(self, measurement: MeasurementItem, spec: InsulationSpec) -> MaterialItem:
         """Calculate jacketing/facing material."""
 
-        # Convert linear feet to square feet based on size
-        # Simplified: assume average circumference
-        size_diameter = self._parse_size_to_diameter(measurement.size)
-        circumference = np.pi * (size_diameter + 2 * spec.thickness) / 12  # in feet
-        square_feet = measurement.length * circumference
+        square_feet = self._surface_area_sf(measurement, spec, self._insulated_length(measurement))
 
         if "aluminum_jacket" in spec.special_requirements:
             description = f"Aluminum Jacketing - {measurement.size}"
-            unit_price = self.prices["aluminum_jacket"] * self.markup
+            price_key = "aluminum_jacket"
         else:
             facing_description = spec.facing or "Facing"
             description = f"{facing_description} Facing - {measurement.size}"
-            unit_price = self.prices.get("fsk_facing", 1.25) * self.markup
+            price_key = f"{(spec.facing or 'fsk').strip().lower()}_facing"
 
+        base_price = self._lookup_price(price_key)
+        if base_price is None and price_key != "fsk_facing" and "aluminum_jacket" not in spec.special_requirements:
+            # Unknown facing type: FSK is the generic duct facing in the default book, but say so.
+            self.warnings.append(f"{measurement.item_id}: no '{price_key}' price; priced as fsk_facing")
+            price_key = "fsk_facing"
+            base_price = self._lookup_price(price_key)
+        if base_price is None:
+            return self._unpriced(description, "SF", square_feet, "jacket", measurement.system_type,
+                                  price_key, measurement.item_id)
+
+        unit_price = base_price * self.markup
         return MaterialItem(
             description=description,
             unit="SF",
@@ -586,22 +767,27 @@ class PricingEngine:
             unit_price=unit_price,
             total_price=square_feet * unit_price,
             category="jacket",
+            system_type=measurement.system_type,
         )
 
     def _calculate_mastic(self, measurement: MeasurementItem, spec: InsulationSpec) -> MaterialItem:
         """Calculate mastic coating."""
 
-        size_diameter = self._parse_size_to_diameter(measurement.size)
-        circumference = np.pi * (size_diameter + 2 * spec.thickness) / 12
-        square_feet = measurement.length * circumference
+        square_feet = self._surface_area_sf(measurement, spec, self._insulated_length(measurement))
+        base_price = self._lookup_price("mastic")
+        if base_price is None:
+            return self._unpriced("Mastic Vapor Seal Coating", "SF", square_feet, "mastic",
+                                  measurement.system_type, "mastic", measurement.item_id)
 
+        unit_price = base_price * self.markup
         return MaterialItem(
             description="Mastic Vapor Seal Coating",
             unit="SF",
             quantity=square_feet,
-            unit_price=self.prices["mastic"] * self.markup,
-            total_price=square_feet * self.prices["mastic"] * self.markup,
+            unit_price=unit_price,
+            total_price=square_feet * unit_price,
             category="mastic",
+            system_type=measurement.system_type,
         )
 
     def _calculate_accessories(self, measurement: MeasurementItem, spec: InsulationSpec) -> List[MaterialItem]:
@@ -613,30 +799,28 @@ class PricingEngine:
         if "stainless_bands" in spec.special_requirements:
             # Assume bands every 12 inches
             band_count = int(measurement.length) + 1
-            accessories.append(
-                MaterialItem(
-                    description="Stainless Steel Bands",
-                    unit="EA",
-                    quantity=band_count,
-                    unit_price=self.prices["stainless_bands"] * self.markup,
-                    total_price=band_count * self.prices["stainless_bands"] * self.markup,
-                    category="accessories",
+            base_price = self._lookup_price("stainless_bands")
+            if base_price is None:
+                accessories.append(self._unpriced("Stainless Steel Bands", "EA", band_count, "accessories",
+                                                  measurement.system_type, "stainless_bands", measurement.item_id))
+            else:
+                unit_price = base_price * self.markup
+                accessories.append(
+                    MaterialItem(
+                        description="Stainless Steel Bands",
+                        unit="EA",
+                        quantity=band_count,
+                        unit_price=unit_price,
+                        total_price=band_count * unit_price,
+                        category="accessories",
+                        system_type=measurement.system_type,
+                    )
                 )
-            )
 
         # Adhesive (estimate based on surface area)
         # Add adhesive calculation here
 
         return accessories
-
-    def _parse_size_to_diameter(self, size: str) -> float:
-        """Parse size string to diameter in inches."""
-
-        # Handle various formats: "4\"", "4 inch", "4x6", etc.
-        numbers = re.findall(r"\d+(?:\.\d+)?", size)
-        if numbers:
-            return float(numbers[0])
-        return 12.0  # default
 
     def calculate_labor(self, materials: List[MaterialItem]) -> Tuple[float, float]:
         """Calculate labor hours and cost."""
@@ -645,11 +829,11 @@ class PricingEngine:
 
         for material in materials:
             if material.category == "insulation":
-                if "duct" in material.description.lower():
-                    hours = material.quantity * self.labor_rates["duct_insulation"]
-                else:
-                    hours = material.quantity * self.labor_rates["pipe_insulation"]
-                total_hours += hours
+                is_duct = (material.system_type or "").lower() == "duct" or (
+                    not material.system_type and "duct" in material.description.lower()
+                )
+                rate = self.labor_rates["duct_insulation" if is_duct else "pipe_insulation"]
+                total_hours += material.quantity * rate
             elif material.category == "jacket":
                 total_hours += material.quantity * self.labor_rates["jacketing"]
             elif material.category == "mastic":
@@ -658,8 +842,7 @@ class PricingEngine:
         # Add setup, cleanup, and supervision (20% overhead)
         total_hours *= 1.20
 
-        labor_rate = 65.0
-        return total_hours, total_hours * labor_rate
+        return total_hours, total_hours * self.labor_rate
 
 
 class QuoteGenerator:
@@ -773,7 +956,7 @@ class QuoteGenerator:
             measurements=measurements,
             materials=materials,
             labor_hours=labor_hours,
-            labor_rate=65.0,
+            labor_rate=(labor_cost / labor_hours) if labor_hours else PricingEngine.DEFAULT_LABOR_RATE,
             subtotal=subtotal,
             contingency_percent=contingency_percent,
             total=total,
