@@ -564,6 +564,11 @@ class PricingEngine:
     # Spec matching
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _location_class(text: str) -> str:
+        """Free-text location ('Roof - RTU-1', 'Mech room') -> 'outdoor' | 'indoor'."""
+        return "outdoor" if re.search(r"outdoor|exterior|outside|roof|exposed|yard|weather|penthouse", (text or "").lower()) else "indoor"
+
     def _find_applicable_spec(self, measurement: MeasurementItem, specs: List[InsulationSpec]) -> Optional[InsulationSpec]:
         """Find the specification that applies to this measurement.
 
@@ -587,7 +592,7 @@ class PricingEngine:
                 size_score = 0  # explicit hit
             else:
                 return None  # explicit miss
-            location_score = 0 if spec.location == measurement.location else 1
+            location_score = 0 if self._location_class(spec.location) == self._location_class(measurement.location) else 1
             return (size_score, location_score)
 
         ranked = [(r, i, s) for i, s in enumerate(candidates) if (r := rank(s)) is not None]

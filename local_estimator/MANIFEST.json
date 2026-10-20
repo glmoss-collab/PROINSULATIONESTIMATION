@@ -1,0 +1,464 @@
+{
+  "package": "local_estimator",
+  "version": "1.0.0",
+  "purpose": "Offline HVAC insulation takeoff pricing: measurements + specs + price book -> priced quote.",
+  "constraints": [
+    "Python standard library only",
+    "no network",
+    "no AI/API calls",
+    "Python >= 3.9"
+  ],
+  "read_first": [
+    "AI_CONTEXT.md",
+    "README.md",
+    "MANIFEST.json"
+  ],
+  "entry_points": {
+    "python": "from local_estimator import estimate, load_measurements, load_specs",
+    "cli": [
+      "python -m local_estimator demo",
+      "python -m local_estimator estimate --measurements M.csv --specs S.csv",
+      "python -m local_estimator describe",
+      "python -m local_estimator bundle"
+    ]
+  },
+  "modules": [
+    {
+      "module": "models.py",
+      "role": "Data contracts (dataclasses)",
+      "public": [
+        {
+          "name": "InsulationSpec",
+          "kind": "class",
+          "summary": "One insulation rule from the project spec (Division 23 07 xx), e.g. 'CHW pipe 0.5-2 in -> 1 in elastomeric'."
+        },
+        {
+          "name": "MaterialItem",
+          "kind": "class",
+          "summary": "A priced (or flagged-unpriced) material line."
+        },
+        {
+          "name": "MeasurementItem",
+          "kind": "class",
+          "summary": "One takeoff line: a run of duct or pipe (from Bluebeam, a CSV, or typed by hand)."
+        },
+        {
+          "name": "ProjectQuote",
+          "kind": "class",
+          "summary": "ProjectQuote(project_name: 'str', quote_number: 'str', date: 'str', measurements: 'List[MeasurementItem]', materials: 'List[MaterialItem]', labor_hours: 'float', labor_rate: 'float', subtotal: 'float', contingency_percent: 'float', total: 'float', notes: 'List[str]', material_list: 'List[Dict[str, Any]]')"
+        }
+      ]
+    },
+    {
+      "module": "sizes.py",
+      "role": "Parse sizes/lengths, surface-area geometry",
+      "public": [
+        {
+          "name": "ParsedSize",
+          "kind": "class",
+          "summary": "ParsedSize(kind, dims)"
+        },
+        {
+          "name": "classify_location",
+          "kind": "function",
+          "signature": "classify_location(text: 'str') -> 'str'",
+          "summary": "Free-text location -> 'outdoor' | 'indoor'. Used to match a run to an indoor/outdoor spec."
+        },
+        {
+          "name": "parse_length_ft",
+          "kind": "function",
+          "signature": "parse_length_ft(value: 'Union[str, int, float]') -> 'float'",
+          "summary": "Bluebeam/CSV length -> feet. Accepts 125.5, '125.5', '1,250 ft', \"125' 6\\\"\", '18 in'. Raises ValueError otherwise."
+        },
+        {
+          "name": "parse_size",
+          "kind": "function",
+          "signature": "parse_size(size: 'str') -> 'Optional[ParsedSize]'",
+          "summary": "'18x12' -> rect(18,12); '4\"' / '4 inch' / '1-1/2\"' -> round; unparseable -> None (never a silent default)."
+        },
+        {
+          "name": "parse_size_range",
+          "kind": "function",
+          "signature": "parse_size_range(size_range: 'str') -> 'Optional[Tuple[float, float]]'",
+          "summary": "'4-12 inch' -> (4,12); '1/2-2 inch' -> (0.5,2); 'up to 6\"' -> (0,6); 'over 12\"' -> (12,inf); 'all'/free text -> None."
+        },
+        {
+          "name": "surface_area_sf",
+          "kind": "function",
+          "signature": "surface_area_sf(size: 'ParsedSize', thickness_in: 'float', length_lf: 'float') -> 'float'",
+          "summary": "Outside surface area of an insulated run."
+        },
+        {
+          "name": "to_float",
+          "kind": "function",
+          "signature": "to_float(token: 'str') -> 'float'",
+          "summary": "'4' '2.5' '1/2' '1-1/2' '1 1/2' -> float."
+        }
+      ]
+    },
+    {
+      "module": "pricebook.py",
+      "role": "Price book + key naming convention",
+      "public": [
+        {
+          "name": "PriceBook",
+          "kind": "class",
+          "summary": "Immutable-ish lookup table. Build with ``PriceBook.load(path)`` or ``PriceBook(dict)``."
+        },
+        {
+          "name": "normalize_key",
+          "kind": "function",
+          "signature": "normalize_key(key: 'Any') -> 'str'",
+          "summary": ""
+        }
+      ]
+    },
+    {
+      "module": "engine.py",
+      "role": "Quantities, pricing, labor (the core)",
+      "public": [
+        {
+          "name": "PricingEngine",
+          "kind": "class",
+          "summary": ""
+        }
+      ]
+    },
+    {
+      "module": "scope.py",
+      "role": "Company exclusions (what we do not bid)",
+      "public": [
+        {
+          "name": "apply_scope",
+          "kind": "function",
+          "signature": "apply_scope(specs: 'List[InsulationSpec]', measurements: 'List[MeasurementItem]', keywords: 'List[str]' = ['duct liner', 'liner', 'internal liner', 'acoustic liner', 'acoustic only', 'waste', 'sanitary', 'domestic water', 'plumbing', 'drain', 'sewer', 'fire sprinkler', 'sprinkler', 'fire protection pipe', 'underground', 'buried', 'below grade']) -> 'Tuple[List[InsulationSpec], List[MeasurementItem], List[Dict[str, str]]]'",
+          "summary": "Return (kept specs, kept measurements, exclusions[{kind,id,reason}])."
+        },
+        {
+          "name": "measurement_exclusion_reason",
+          "kind": "function",
+          "signature": "measurement_exclusion_reason(m: 'MeasurementItem', keywords: 'List[str]' = ['duct liner', 'liner', 'internal liner', 'acoustic liner', 'acoustic only', 'waste', 'sanitary', 'domestic water', 'plumbing', 'drain', 'sewer', 'fire sprinkler', 'sprinkler', 'fire protection pipe', 'underground', 'buried', 'below grade']) -> 'Optional[str]'",
+          "summary": ""
+        },
+        {
+          "name": "spec_exclusion_reason",
+          "kind": "function",
+          "signature": "spec_exclusion_reason(spec: 'InsulationSpec', keywords: 'List[str]' = ['duct liner', 'liner', 'internal liner', 'acoustic liner', 'acoustic only', 'waste', 'sanitary', 'domestic water', 'plumbing', 'drain', 'sewer', 'fire sprinkler', 'sprinkler', 'fire protection pipe', 'underground', 'buried', 'below grade']) -> 'Optional[str]'",
+          "summary": ""
+        }
+      ]
+    },
+    {
+      "module": "spec_text.py",
+      "role": "Plain-text spec -> InsulationSpec (best effort)",
+      "public": [
+        {
+          "name": "extract_specs_from_text",
+          "kind": "function",
+          "signature": "extract_specs_from_text(text: 'str') -> 'List[InsulationSpec]'",
+          "summary": ""
+        }
+      ]
+    },
+    {
+      "module": "loaders.py",
+      "role": "CSV/JSON/Bluebeam-style rows -> models",
+      "public": [
+        {
+          "name": "load_measurements",
+          "kind": "function",
+          "signature": "load_measurements(path: 'Union[str, Path]') -> 'Tuple[List[MeasurementItem], List[str]]'",
+          "summary": "CSV or JSON file -> (measurements, load warnings)."
+        },
+        {
+          "name": "load_specs",
+          "kind": "function",
+          "signature": "load_specs(path: 'Union[str, Path]') -> 'List[InsulationSpec]'",
+          "summary": "Spec table (CSV or JSON). Columns: system_type,size_range,thickness,material[,facing,special_requirements,location]. special_requirements in CSV is a ';'-separated list."
+        },
+        {
+          "name": "measurements_from_rows",
+          "kind": "function",
+          "signature": "measurements_from_rows(rows: 'Iterable[Row]') -> 'Tuple[List[MeasurementItem], List[str]]'",
+          "summary": ""
+        }
+      ]
+    },
+    {
+      "module": "quote.py",
+      "role": "Pipeline entry point estimate(), quote assembly, alternatives",
+      "public": [
+        {
+          "name": "EstimateResult",
+          "kind": "class",
+          "summary": "EstimateResult(quote: 'ProjectQuote', alternatives: 'Dict[str, Dict[str, float]]' = <factory>, warnings: 'List[str]' = <factory>, exclusions: 'List[Dict[str, str]]' = <factory>)"
+        },
+        {
+          "name": "consolidate_materials",
+          "kind": "function",
+          "signature": "consolidate_materials(materials: 'List[MaterialItem]') -> 'List[Dict[str, Any]]'",
+          "summary": "Merge identical lines (same description+unit) into a distributor-ready list sorted by category."
+        },
+        {
+          "name": "estimate",
+          "kind": "function",
+          "signature": "estimate(project_name: 'str', measurements: 'List[MeasurementItem]', specs: 'List[InsulationSpec]', *, pricebook: 'Optional[PriceBook]' = None, markup_percent: 'float' = 0.0, labor_rate: 'float' = 65.0, contingency_percent: 'float' = 10.0, fitting_allowance_lf: 'Optional[Dict[str, float]]' = None, apply_scope_filter: 'bool' = True, include_alternatives: 'bool' = True, extra_warnings: 'Optional[List[str]]' = None, quote_number: 'Optional[str]' = None, quote_date: 'Optional[str]' = None) -> 'EstimateResult'",
+          "summary": "Price a takeoff. ``markup_percent`` applies to material prices only (15 -> x1.15)."
+        },
+        {
+          "name": "quote_notes",
+          "kind": "function",
+          "signature": "quote_notes(specs: 'List[InsulationSpec]', measurements: 'List[MeasurementItem]') -> 'List[str]'",
+          "summary": ""
+        },
+        {
+          "name": "upgrade_alternatives",
+          "kind": "function",
+          "signature": "upgrade_alternatives(measurements, specs, make_engine) -> 'Dict[str, Dict[str, float]]'",
+          "summary": "Price two common upgrades. An alternative is omitted if it cannot be fully priced from the price book."
+        }
+      ]
+    },
+    {
+      "module": "report.py",
+      "role": "Bid text, JSON, material CSV",
+      "public": [
+        {
+          "name": "render_bid_text",
+          "kind": "function",
+          "signature": "render_bid_text(result: 'EstimateResult', company_name: 'str' = 'Guaranteed Insulation Inc.') -> 'str'",
+          "summary": ""
+        },
+        {
+          "name": "render_json",
+          "kind": "function",
+          "signature": "render_json(result: 'EstimateResult') -> 'str'",
+          "summary": ""
+        },
+        {
+          "name": "render_material_csv",
+          "kind": "function",
+          "signature": "render_material_csv(result: 'EstimateResult') -> 'str'",
+          "summary": ""
+        }
+      ]
+    },
+    {
+      "module": "cli.py",
+      "role": "Command line",
+      "public": [
+        {
+          "name": "main",
+          "kind": "function",
+          "signature": "main(argv: 'Optional[List[str]]' = None) -> 'int'",
+          "summary": ""
+        }
+      ]
+    },
+    {
+      "module": "manifest.py",
+      "role": "This manifest + AI bundle",
+      "public": [
+        {
+          "name": "build_manifest",
+          "kind": "function",
+          "signature": "build_manifest() -> 'Dict[str, Any]'",
+          "summary": ""
+        },
+        {
+          "name": "render_bundle",
+          "kind": "function",
+          "signature": "render_bundle() -> 'str'",
+          "summary": "One text document: docs, manifest, source, data, tests. Paste into a chat with an AI that cannot read your files."
+        },
+        {
+          "name": "render_manifest",
+          "kind": "function",
+          "signature": "render_manifest() -> 'str'",
+          "summary": ""
+        }
+      ]
+    }
+  ],
+  "schemas": {
+    "InsulationSpec": {
+      "system_type": "str",
+      "size_range": "str",
+      "thickness": "float",
+      "material": "str",
+      "facing": "str | None",
+      "special_requirements": "List[str]",
+      "location": "str"
+    },
+    "MeasurementItem": {
+      "item_id": "str",
+      "system_type": "str",
+      "size": "str",
+      "length": "float",
+      "location": "str",
+      "elevation_changes": "int",
+      "fittings": "Dict[str, int]",
+      "notes": "List[str]"
+    },
+    "MaterialItem": {
+      "description": "str",
+      "unit": "str",
+      "quantity": "float",
+      "unit_price": "float",
+      "total_price": "float",
+      "category": "str",
+      "system_type": "str",
+      "item_id": "str"
+    },
+    "ProjectQuote": {
+      "project_name": "str",
+      "quote_number": "str",
+      "date": "str",
+      "measurements": "List[MeasurementItem]",
+      "materials": "List[MaterialItem]",
+      "labor_hours": "float",
+      "labor_rate": "float",
+      "subtotal": "float",
+      "contingency_percent": "float",
+      "total": "float",
+      "notes": "List[str]",
+      "material_list": "List[Dict[str, Any]]"
+    }
+  },
+  "inputs": {
+    "measurement_columns_and_aliases": {
+      "item_id": [
+        "item_id",
+        "id",
+        "mark",
+        "label",
+        "name",
+        "tag"
+      ],
+      "system_type": [
+        "system_type",
+        "system",
+        "service",
+        "type"
+      ],
+      "size": [
+        "size",
+        "dimensions",
+        "dimension",
+        "diameter",
+        "nominal_size"
+      ],
+      "length": [
+        "length",
+        "length_ft",
+        "lf",
+        "measurement",
+        "total_length",
+        "qty",
+        "quantity"
+      ],
+      "location": [
+        "location",
+        "layer",
+        "space",
+        "area",
+        "sheet",
+        "page_label"
+      ],
+      "notes": [
+        "notes",
+        "comments",
+        "comment",
+        "description",
+        "subject"
+      ]
+    },
+    "fitting_columns": {
+      "elbow": "elbow",
+      "elbows": "elbow",
+      "tee": "tee",
+      "tees": "tee",
+      "reducer": "reducer",
+      "reducers": "reducer",
+      "valve": "valve",
+      "valves": "valve",
+      "flange": "flange",
+      "flanges": "flange"
+    },
+    "spec_table_columns": [
+      "system_type",
+      "size_range",
+      "thickness",
+      "material",
+      "facing",
+      "special_requirements (; separated)",
+      "location"
+    ],
+    "price_book_keys_default": [
+      "aluminum_jacket",
+      "asj_facing",
+      "cellular_glass_1.0",
+      "elastomeric_0.5",
+      "elastomeric_1.0",
+      "fiberglass_1.5",
+      "fiberglass_2.0",
+      "fsk_facing",
+      "mastic",
+      "mineral_wool_1.5",
+      "pvc_jacket_20mil",
+      "pvc_jacket_30mil",
+      "stainless_bands",
+      "stainless_jacket"
+    ]
+  },
+  "assumptions_to_review": {
+    "fitting_allowance_lf_placeholder": {
+      "elbow": 1.5,
+      "tee": 2.5
+    },
+    "labor_hours_per_unit": {
+      "duct_insulation": 0.45,
+      "pipe_insulation": 0.35,
+      "jacketing": 0.25,
+      "mastic": 0.15
+    },
+    "labor_overhead_multiplier": 1.2,
+    "default_labor_rate_usd_per_hour": 65.0,
+    "supported_systems": [
+      "duct",
+      "pipe"
+    ],
+    "jacket_requirement_precedence": [
+      "aluminum_jacket",
+      "stainless_jacket",
+      "pvc_jacket_30mil",
+      "pvc_jacket_20mil"
+    ],
+    "scope_excluded_keywords": [
+      "duct liner",
+      "liner",
+      "internal liner",
+      "acoustic liner",
+      "acoustic only",
+      "waste",
+      "sanitary",
+      "domestic water",
+      "plumbing",
+      "drain",
+      "sewer",
+      "fire sprinkler",
+      "sprinkler",
+      "fire protection pipe",
+      "underground",
+      "buried",
+      "below grade"
+    ]
+  },
+  "data_files": [
+    "bluebeam_export_example.csv",
+    "measurements_template.csv",
+    "pricebook_sample.json",
+    "spec_text_example.txt",
+    "specs_example.csv"
+  ]
+}

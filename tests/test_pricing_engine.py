@@ -71,6 +71,9 @@ def test_spec_selected_by_size_band_then_location():
     indoor = duct_spec(location="indoor")
     outdoor = duct_spec(location="outdoor")
     assert engine._find_applicable_spec(duct(location="outdoor"), [indoor, outdoor]) is outdoor
+    # real takeoffs carry free-text locations, not the words "indoor"/"outdoor"
+    assert engine._find_applicable_spec(duct(location="Roof - RTU-1"), [indoor, outdoor]) is outdoor
+    assert engine._find_applicable_spec(duct(location="Mech room 101"), [outdoor, indoor]) is indoor
 
 
 def test_duct_labor_uses_duct_rate():
