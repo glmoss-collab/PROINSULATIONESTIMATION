@@ -1,4 +1,6 @@
 import ast
+import shutil
+import subprocess
 import contextlib
 import io
 import json
@@ -7,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from local_estimator import (PriceBook, estimate, extract_specs_from_text, load_measurements, load_specs, render_bid_text,
+from local_estimator import (PriceBook, PricingEngine, estimate, extract_specs_from_text, load_measurements, load_specs, render_bid_text,
                              render_json, render_material_csv)
 from local_estimator.cli import DATA, main
 from local_estimator.manifest import render_manifest
@@ -75,7 +77,50 @@ class Pipeline(unittest.TestCase):
             self.assertTrue({"bid.txt", "estimate.json", "material_list.csv"} <= {p.name for p in Path(out).iterdir()})
 
 
+class ReviewRegressions(unittest.TestCase):
+    def test_compact_hyphen_range_does_not_steal_thickness(self):
+        (spec,) = extract_specs_from_text("Chilled water pipe 1/2-2 inch shall be 1 inch elastomeric.")
+        self.assertEqual((spec.size_range, spec.thickness), ("1/2-2 inch", 1.0))
+        (spec,) = extract_specs_from_text("Pipe insulation 1-1/2 inch thick fiberglass with ASJ.")
+        self.assertEqual((spec.size_range, spec.thickness, spec.facing), ("all", 1.5, "ASJ"))
+
+    def test_pvc_is_a_field_jacket_not_a_facing(self):
+        (spec,) = extract_specs_from_text("Exterior pipe shall be 1 inch elastomeric with PVC jacket.")
+        self.assertIsNone(spec.facing)
+        self.assertEqual(spec.special_requirements, ["pvc_jacket_20mil"])
+        (spec,) = extract_specs_from_text("Exterior pipe: 1 inch elastomeric with 30 mil PVC jacket.")
+        self.assertEqual(spec.special_requirements, ["pvc_jacket_30mil"])
+
+    def test_upgrade_delta_includes_labor(self):
+        from local_estimator import InsulationSpec, MeasurementItem
+
+        pipe = MeasurementItem("P", "pipe", '2"', 100, "Mech room")
+        spec = InsulationSpec("pipe", "all", 1.0, "elastomeric")  # unjacketed -> PVC adds material AND jacket hours
+        alt = estimate("T", [pipe], [spec]).alternatives["pvc_jacket_option"]
+        engine = PricingEngine()
+        jacket = [i for i in engine.calculate_materials([pipe], [InsulationSpec("pipe", "all", 1.0, "elastomeric",
+                                                                                 special_requirements=["pvc_jacket_20mil"])])
+                  if i.category == "jacket"]
+        material_only = sum(i.total_price for i in jacket)
+        self.assertAlmostEqual(alt["difference"], material_only + engine.calculate_labor(jacket)[1])
+
+    def test_linear_feet_note_is_not_mistaken_for_liner(self):
+        from local_estimator import MeasurementItem
+        from local_estimator.scope import measurement_exclusion_reason
+
+        self.assertIsNone(measurement_exclusion_reason(MeasurementItem("A", "duct", "12x12", 10, notes=["125 linear feet"])))
+        self.assertIsNotNone(measurement_exclusion_reason(MeasurementItem("B", "duct", "12x12", 10, notes=["1 in duct liner"])))
+
+
 class Hygiene(unittest.TestCase):
+    def test_package_files_are_not_git_ignored(self):
+        """A repo-wide *.csv ignore once kept the sample data out of the commit; the demo then failed on checkout."""
+        if not shutil.which("git") or not (PKG.parent / ".git").exists():
+            self.skipTest("not a git checkout")
+        files = [str(p.relative_to(PKG.parent)) for p in PKG.rglob("*") if p.is_file() and "__pycache__" not in p.parts]
+        ignored = subprocess.run(["git", "check-ignore", *files], cwd=PKG.parent, capture_output=True, text=True).stdout.split()
+        self.assertEqual(ignored, [], "package files are git-ignored; fix .gitignore")
+
     def test_imports_are_stdlib_or_package_only(self):
         allowed = getattr(sys, "stdlib_module_names", None)
         if allowed is None:

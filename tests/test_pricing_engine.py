@@ -122,3 +122,16 @@ def test_factory_facing_adds_no_labor_but_field_jacket_does():
     jacket_mats = engine.calculate_materials([pipe], [jacketed])
     area = next(m.quantity for m in jacket_mats if m.category == "jacket")
     assert engine.calculate_labor(jacket_mats)[0] == pytest.approx(plain_hours + area * engine.labor_rates["jacketing"] * 1.2)
+
+
+def test_non_aluminum_field_jackets_are_priced_with_labor():
+    """PVC/stainless jackets were treated as factory facing (or skipped when unfaced) by the legacy engine."""
+    engine = PricingEngine()
+    pipe = MeasurementItem("P-1", "pipe", '2"', 50.0, "Roof")
+    for key in ("pvc_jacket_20mil", "stainless_jacket"):
+        spec = InsulationSpec("pipe", "all", 1.0, "elastomeric", special_requirements=[key], location="outdoor")
+        mats = engine.calculate_materials([pipe], [spec])
+        jacket = [m for m in mats if m.category == "jacket"]
+        assert len(jacket) == 1 and jacket[0].total_price > 0, key
+        bare = engine.calculate_labor([m for m in mats if m.category == "insulation"])[0]
+        assert engine.calculate_labor(mats)[0] > bare, key

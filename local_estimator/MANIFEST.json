@@ -65,6 +65,12 @@
           "summary": "Free-text location -> 'outdoor' | 'indoor'. Used to match a run to an indoor/outdoor spec."
         },
         {
+          "name": "find_size_range",
+          "kind": "function",
+          "signature": "find_size_range(text: 'str', require_unit: 'bool' = False) -> 'Optional[Tuple[str, Tuple[float, float]]]'",
+          "summary": "First 'lo-hi' / 'lo to hi' range in text -> (matched text, (lo, hi)); None if absent."
+        },
+        {
           "name": "parse_length_ft",
           "kind": "function",
           "signature": "parse_length_ft(value: 'Union[str, int, float]') -> 'float'",
@@ -215,7 +221,7 @@
           "name": "upgrade_alternatives",
           "kind": "function",
           "signature": "upgrade_alternatives(measurements, specs, make_engine) -> 'Dict[str, Dict[str, float]]'",
-          "summary": "Price two common upgrades. An alternative is omitted if it cannot be fully priced from the price book."
+          "summary": "Price two common upgrades as bid deltas: materials + labor (before contingency) for the affected runs."
         }
       ]
     },

@@ -45,14 +45,34 @@ def parse_size(size: str) -> Optional[ParsedSize]:
     return None
 
 
+_RANGE = rf"({NUM})\s*(?:-|\u2013|\bto\b|through)\s*({NUM})"
+_UNIT = r'\s*(?:"|\u201d|\u2033|inch|in\b)'
+
+
+def find_size_range(text: str, require_unit: bool = False) -> Optional[Tuple[str, Tuple[float, float]]]:
+    """First 'lo-hi' / 'lo to hi' range in text -> (matched text, (lo, hi)); None if absent.
+
+    Ranges must be written ascending. That rejects a mixed number misread as a range ('1-1/2' -> 1 to 1/2),
+    while '1/2-2', '1-1/2 to 3' and '2-1/2 - 4' still parse.
+    """
+    pattern = _RANGE + (_UNIT if require_unit else "")
+    for hit in re.finditer(pattern, (text or "").lower()):
+        lo, hi = to_float(hit.group(1)), to_float(hit.group(2))
+        if lo <= hi:
+            return hit.group(0), (lo, hi)
+    return None
+
+
 def parse_size_range(size_range: str) -> Optional[Tuple[float, float]]:
-    """'4-12 inch' -> (4,12); '1/2-2 inch' -> (0.5,2); 'up to 6"' -> (0,6); 'over 12"' -> (12,inf); 'all'/free text -> None."""
+    """'4-12 inch' -> (4,12); '1/2-2 inch' -> (0.5,2); 'up to 6"' -> (0,6); 'over 12"' -> (12,inf); 'all'/free text -> None.
+
+    A single size like '1-1/2 inch' is not a range and returns None (treated as unconstrained, not as 1 to 1/2).
+    """
     text = (size_range or "").lower()
-    text = re.sub(r'(inches|inch|\bin\b\.?|["″”])', "", text)
-    rng = re.search(rf"({NUM})\s*(?:-|to|through|–)\s*({NUM})", text)
-    if rng:
-        lo, hi = to_float(rng.group(1)), to_float(rng.group(2))
-        return (min(lo, hi), max(lo, hi))
+    text = re.sub(r'(inches|inch|\bin\b\.?|["\u2033\u201d])', "", text)
+    found = find_size_range(text)
+    if found:
+        return found[1]
     upto = re.search(rf"(?:up to|under|<=?|through)\s*({NUM})|({NUM})\s*(?:and smaller|or less)", text)
     if upto:
         return (0.0, to_float(upto.group(1) or upto.group(2)))

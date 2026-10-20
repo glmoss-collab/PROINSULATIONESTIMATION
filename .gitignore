@@ -59,6 +59,7 @@ material*.txt
 *.csv
 !measurements_template.csv
 !pricebook_sample.json
+!local_estimator/data/*.csv
 
 # Temporary files
 *.tmp

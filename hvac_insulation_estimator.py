@@ -548,7 +548,7 @@ class PricingEngine:
             materials.append(self._calculate_insulation(measurement, spec))
 
             # Calculate facing/jacket
-            if spec.facing or "aluminum_jacket" in spec.special_requirements:
+            if spec.facing or self._field_jacket_key(spec):
                 materials.append(self._calculate_jacketing(measurement, spec))
 
             # Calculate mastic
@@ -741,6 +741,12 @@ class PricingEngine:
             system_type=measurement.system_type,
         )
 
+    # Field-applied jackets, in precedence order (same contract as local_estimator.engine.JACKET_REQUIREMENTS).
+    FIELD_JACKETS = ("aluminum_jacket", "stainless_jacket", "pvc_jacket_30mil", "pvc_jacket_20mil")
+
+    def _field_jacket_key(self, spec: InsulationSpec) -> Optional[str]:
+        return next((key for key in self.FIELD_JACKETS if key in spec.special_requirements), None)
+
     def _calculate_jacketing(self, measurement: MeasurementItem, spec: InsulationSpec) -> MaterialItem:
         """Calculate jacketing/facing material."""
 
@@ -748,18 +754,19 @@ class PricingEngine:
 
         # Field-applied jacket -> "jacket" (carries jacketing labor). Factory-applied facing (FSK/ASJ comes on the
         # insulation product) -> "facing": a material line only, its install time is already in insulation labor.
-        category = "facing"
-        if "aluminum_jacket" in spec.special_requirements:
-            description = f"Aluminum Jacketing - {measurement.size}"
-            price_key = "aluminum_jacket"
+        jacket_key = self._field_jacket_key(spec)
+        if jacket_key:
+            description = f"{jacket_key.replace('_', ' ').title()} - {measurement.size}"
+            price_key = jacket_key
             category = "jacket"
         else:
+            category = "facing"
             facing_description = spec.facing or "Facing"
             description = f"{facing_description} Facing - {measurement.size}"
             price_key = f"{(spec.facing or 'fsk').strip().lower()}_facing"
 
         base_price = self._lookup_price(price_key)
-        if base_price is None and price_key != "fsk_facing" and "aluminum_jacket" not in spec.special_requirements:
+        if base_price is None and category == "facing" and price_key != "fsk_facing":
             # Unknown facing type: FSK is the generic duct facing in the default book, but say so.
             self.warnings.append(f"{measurement.item_id}: no '{price_key}' price; priced as fsk_facing")
             price_key = "fsk_facing"

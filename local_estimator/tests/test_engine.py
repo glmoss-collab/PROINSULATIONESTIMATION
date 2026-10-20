@@ -27,6 +27,8 @@ class SizeParsing(unittest.TestCase):
         self.assertEqual(parse_size_range('up to 6"'), (0.0, 6.0))
         self.assertEqual(parse_size_range("over 12 inch")[0], 12.0)
         self.assertIsNone(parse_size_range("all"))
+        self.assertIsNone(parse_size_range("1-1/2 inch"))  # a single mixed-number size, not "1 to 1/2"
+        self.assertEqual(parse_size_range("1-1/2 to 3 inch"), (1.5, 3.0))
 
     def test_lengths(self):
         self.assertEqual(parse_length_ft("125.5"), 125.5)

@@ -122,7 +122,11 @@ def consolidate_materials(materials: List[MaterialItem]) -> List[Dict[str, Any]]
 
 
 def upgrade_alternatives(measurements, specs, make_engine) -> Dict[str, Dict[str, float]]:
-    """Price two common upgrades. An alternative is omitted if it cannot be fully priced from the price book."""
+    """Price two common upgrades as bid deltas: materials + labor (before contingency) for the affected runs.
+
+    Labor matters: a field-applied jacket earns jacketing hours, so a material-only delta would understate the change.
+    An alternative is omitted if it cannot be fully priced from the price book.
+    """
     result: Dict[str, Dict[str, float]] = {}
 
     def cost(kind: str, transform) -> Optional[Dict[str, float]]:
@@ -130,9 +134,13 @@ def upgrade_alternatives(measurements, specs, make_engine) -> Dict[str, Dict[str
         if not runs:
             return None
         base_engine, alt_engine = make_engine(), make_engine()
-        base = sum(i.total_price for i in base_engine.calculate_materials(runs, specs))
-        alt_specs = [transform(s) if s.system_type == kind else s for s in specs]
-        alt = sum(i.total_price for i in alt_engine.calculate_materials(runs, alt_specs))
+
+        def bid_cost(engine, run_specs) -> float:
+            items = engine.calculate_materials(runs, run_specs)
+            return sum(i.total_price for i in items) + engine.calculate_labor(items)[1]
+
+        base = bid_cost(base_engine, specs)
+        alt = bid_cost(alt_engine, [transform(s) if s.system_type == kind else s for s in specs])
         if base_engine.warnings or alt_engine.warnings:
             return None
         return {"base_cost": base, "upgrade_cost": alt, "difference": alt - base}

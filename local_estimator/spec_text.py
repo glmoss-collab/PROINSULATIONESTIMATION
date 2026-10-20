@@ -11,7 +11,7 @@ import re
 from typing import List
 
 from .models import InsulationSpec
-from .sizes import NUM, parse_size_range, to_float
+from .sizes import NUM, find_size_range, parse_size_range, to_float
 
 MATERIALS = {
     "fiberglass": r"fiberglass|fibreglass|glass fiber|glass fibre",
@@ -19,13 +19,23 @@ MATERIALS = {
     "elastomeric": r"elastomeric|flexible foam|armaflex",
     "cellular_glass": r"cellular glass|foamglass",
 }
-FACINGS = {"FSK": r"\bfsk\b|foil[- ]scrim[- ]kraft", "ASJ": r"\basj\b|all[- ]service jacket", "PVC": r"\bpvc\b"}
+# Factory-applied facings only. PVC is a field-applied jacket (see REQUIREMENTS), never a facing.
+FACINGS = {"FSK": r"\bfsk\b|foil[- ]scrim[- ]kraft", "ASJ": r"\basj\b|all[- ]service jacket"}
 REQUIREMENTS = {
     "aluminum_jacket": r"aluminum\s+jacket|metal\s+jacket",
     "stainless_bands": r"stainless\s+(?:steel\s+)?bands?",
+    "pvc_jacket_30mil": r"30[- ]?mil\b[^.;]*\bpvc\b|\bpvc\b[^.;]*30[- ]?mil\b",
+    "pvc_jacket_20mil": r"\bpvc\s+(?:jacket|jacketing|cover)",
     "mastic_coating": r"mastic|vapor\s+seal",
 }
 OUTDOOR = r"outdoor|exterior|outside|exposed to weather|roof"
+
+
+def _requirements(text: str) -> List[str]:
+    reqs = [req for req, pat in REQUIREMENTS.items() if re.search(pat, text)]
+    if "pvc_jacket_30mil" in reqs and "pvc_jacket_20mil" in reqs:
+        reqs.remove("pvc_jacket_20mil")  # one PVC jacket, the thicker callout wins
+    return reqs
 
 
 def extract_specs_from_text(text: str) -> List[InsulationSpec]:
@@ -36,12 +46,15 @@ def extract_specs_from_text(text: str) -> List[InsulationSpec]:
         material = next((name for name, pat in MATERIALS.items() if re.search(pat, low)), None)
         # Size band first and REMOVE it from the chunk: otherwise "1/2 to 2 inch ... 1 inch" reads thickness as 2.
         size_range = "all"
-        for pattern in (rf"({NUM})\s*(?:\bto\b|through|\s-\s)\s*({NUM})\s*(?:inch|in\b|\")", rf"(?:up to|over|above|under)\s*({NUM})\s*(?:inch|in\b|\")"):
-            hit = re.search(pattern, low)
-            if hit and parse_size_range(hit.group(0)):
-                size_range = hit.group(0).strip()
-                low = low.replace(hit.group(0), " ", 1)
-                break
+        found = find_size_range(low, require_unit=True)
+        if found:
+            size_range = found[0].strip()
+            low = low.replace(found[0], " ", 1)
+        else:
+            upto = re.search(rf"(?:up to|over|above|under)\s*({NUM})\s*(?:inch|in\b|\")", low)
+            if upto and parse_size_range(upto.group(0)):
+                size_range = upto.group(0).strip()
+                low = low.replace(upto.group(0), " ", 1)
         thickness = re.search(rf"({NUM})\s*(?:inch(?:es)?|in\b|\"|\u201d)\s*(?:thick)?", low)
         if not (system and thickness and material):
             continue
@@ -53,7 +66,7 @@ def extract_specs_from_text(text: str) -> List[InsulationSpec]:
                 thickness=to_float(thickness.group(1)),
                 material=material,
                 facing=facing,
-                special_requirements=[req for req, pat in REQUIREMENTS.items() if re.search(pat, low)],
+                special_requirements=_requirements(low),
                 location="outdoor" if re.search(OUTDOOR, low) else "indoor",
             )
         )
