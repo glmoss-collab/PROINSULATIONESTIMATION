@@ -74,7 +74,8 @@ Key convention is documented at the top of `pricebook.py`.
 ## Read before trusting a number
 
 Open decisions are listed in `AI_CONTEXT.md` § "Known limitations". The two that move dollars most:
-the **labor model is inherited and unvalidated** (sample output shows labor ≈ 9× materials), and the **fitting allowance
+the **labor rates are inherited and unvalidated** (the facing double count is fixed; sample labor is still ≈ 2.9× materials),
+and the **fitting allowance
 (1.5 LF elbow / 2.5 LF tee) is a placeholder**. This package prices a takeoff; it does not measure drawings.
 
 *Extracted from the root-level modules (`hvac_insulation_estimator.py`, `guaranteed_insulation_*.py`), which are unchanged.*

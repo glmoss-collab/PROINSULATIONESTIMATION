@@ -27,7 +27,8 @@ report.render_bid_text / render_json / render_material_csv
 
 - `InsulationSpec(system_type, size_range, thickness, material, facing, special_requirements, location)`
 - `MeasurementItem(item_id, system_type, size, length, location, elevation_changes, fittings{kind:count}, notes)`
-- `MaterialItem(description, unit, quantity, unit_price, total_price, category, system_type, item_id)`
+- `MaterialItem(description, unit, quantity, unit_price, total_price, category, system_type, item_id)`; category is
+  `insulation | facing (factory-applied, no labor) | jacket (field-applied) | mastic | accessories`
 - `ProjectQuote(...)`; `EstimateResult(quote, alternatives, warnings, exclusions)` with `.is_draft` (= any warning).
 
 ## 4. Formulas (`engine.py`, `sizes.py`)
@@ -41,7 +42,7 @@ report.render_bid_text / render_json / render_material_csv
 | Jacket / facing $ | `area × pricebook[key] × markup`; key = first of `aluminum_jacket, stainless_jacket, pvc_jacket_30mil, pvc_jacket_20mil` found in `special_requirements`, else `"<facing>_facing"`; none if unfaced |
 | Mastic $ | only if `"mastic_coating"` in requirements: `area × pricebook["mastic"]` |
 | Bands | only if `"stainless_bands"`: `int(length)+1` each (one per foot of run) |
-| Labor hours | `(Σ insulation_qty × 0.45 duct | 0.35 pipe  +  Σ jacket_SF × 0.25  +  Σ mastic_SF × 0.15) × 1.20`; cost = hours × `labor_rate` (default $65) |
+| Labor hours | `(Σ insulation_qty × 0.45 duct \| 0.35 pipe  +  Σ field-jacket_SF × 0.25  +  Σ mastic_SF × 0.15) × 1.20`; cost = hours × `labor_rate` (default $65). Factory facing (FSK/ASJ, category `facing`) adds **no** hours - it is installed with the insulation |
 | Total | `(materials + labor) × (1 + contingency%)`, contingency default 10% |
 | Markup | `markup_percent` applies to **material prices only** |
 
@@ -55,6 +56,7 @@ then the spec whose `location` (indoor/outdoor) matches the run's `location` tex
    unknown fitting ⇒ a `warnings` entry and (for price keys) a `[UNPRICED]` $0 line. `is_draft` stays true until fixed.
 2. **Fittings add length; they never multiply it.**
 3. **Rectangular ducts use perimeter, not a diameter.**
+3b. **Factory facing earns no labor**; only field-applied jackets (`JACKET_REQUIREMENTS`) earn jacketing hours.
 4. **Stdlib only.** `tests/test_pipeline.py::Hygiene` fails on any third-party import.
 5. **Nothing is silently dropped.** Skipped CSV rows → load warnings; scope exclusions → `result.exclusions` with reasons.
 6. Keep `MANIFEST.json` current: `python -m local_estimator describe > local_estimator/MANIFEST.json` (a test enforces it).
@@ -72,8 +74,11 @@ then the spec whose `location` (indoor/outdoor) matches the run's `location` tex
 
 ## 7. Known limitations / open decisions (be honest about these when giving numbers)
 
-1. **Labor model is inherited and unvalidated.** Jacket/facing SF is charged 0.25 h/SF *in addition to* insulation LF hours, including
-   factory-applied FSK/ASJ facing - likely double counting. Sample output: labor ≈ 9× materials. Calibrate against a past job.
+1. **Labor rates are inherited and unvalidated.** The facing double count is fixed (factory FSK/ASJ no longer earns 0.25 h/SF on
+   top of insulation hours; demo labor fell 651.6 h -> 201.9 h), but 0.45 h/LF duct, 0.35 h/LF pipe and 0.25 h/SF field jacket
+   have never been checked against a real job - demo labor is still ~2.9x materials. Calibrate against a past job.
+   Related open question: the price book prices `fsk_facing` per SF *separately* from `fiberglass_1.5` per LF. If your
+   fiberglass price is for already-faced wrap, the facing line double counts material; drop the facing or the key.
 2. **Fitting allowance is a placeholder** (elbow 1.5 LF, tee 2.5 LF); other fittings (valve, flange, reducer) default to *no* allowance and warn.
 3. **No drawing measurement.** Lengths come from the takeoff (Bluebeam, CSV, hand). Per-sheet scale, vector measurement, sheet classification, duplicate-run removal (floor vs riser vs enlarged plan) are out of scope - see root `TAKEOFF_ACCURACY.md`.
 4. **Bluebeam column names are a guess** about the CSV layout; verify with a real export.

@@ -49,13 +49,13 @@ class EngineRules(unittest.TestCase):
         self.assertTrue(any("valve" in w for w in e.warnings))
 
     def test_rectangular_uses_perimeter(self):
-        jacket = next(m for m in PricingEngine().calculate_materials([duct("18x12")], [duct_spec()]) if m.category == "jacket")
+        jacket = next(m for m in PricingEngine().calculate_materials([duct("18x12")], [duct_spec()]) if m.category == "facing")
         self.assertAlmostEqual(jacket.quantity, 2 * (18 + 12 + 6) / 12 * 100)
 
     def test_pipe_uses_circumference(self):
         spec = InsulationSpec("pipe", "all", 1.0, "elastomeric", facing="ASJ")
         pipe = MeasurementItem("P-1", "pipe", '4"', 50.0)
-        jacket = next(m for m in PricingEngine().calculate_materials([pipe], [spec]) if m.category == "jacket")
+        jacket = next(m for m in PricingEngine().calculate_materials([pipe], [spec]) if m.category == "facing")
         self.assertAlmostEqual(jacket.quantity, math.pi * 6 / 12 * 50)
 
     def test_missing_price_is_flagged_not_invented(self):
@@ -98,6 +98,24 @@ class EngineRules(unittest.TestCase):
         hours, cost = e.calculate_labor(e.calculate_materials([duct("12x12")], [duct_spec(facing=None)]))
         self.assertAlmostEqual(hours, 100 * 0.45 * 1.2)
         self.assertAlmostEqual(cost, hours * 100.0)
+
+    def test_factory_facing_adds_no_labor(self):
+        """FSK/ASJ comes on the insulation product; charging it jacketing hours was the double count."""
+        e = PricingEngine()
+        bare, _ = e.calculate_labor(e.calculate_materials([duct()], [duct_spec(facing=None)]))
+        faced = e.calculate_materials([duct()], [duct_spec(facing="FSK")])
+        self.assertTrue(any(m.category == "facing" and m.total_price > 0 for m in faced))  # material still priced
+        self.assertAlmostEqual(e.calculate_labor(faced)[0], bare)
+
+    def test_field_jacket_still_adds_labor(self):
+        e = PricingEngine()
+        pipe = MeasurementItem("P", "pipe", '2"', 50, "Roof")
+        plain = InsulationSpec("pipe", "all", 1.0, "elastomeric", location="outdoor")
+        jacketed = InsulationSpec("pipe", "all", 1.0, "elastomeric", special_requirements=["aluminum_jacket"], location="outdoor")
+        base, _ = e.calculate_labor(e.calculate_materials([pipe], [plain]))
+        mats = e.calculate_materials([pipe], [jacketed])
+        area = next(m.quantity for m in mats if m.category == "jacket")
+        self.assertAlmostEqual(e.calculate_labor(mats)[0], base + area * 0.25 * 1.2)
 
     def test_markup_and_pricebook_override(self):
         pb = PriceBook().with_overrides({"fiberglass_1.5": 10.0})

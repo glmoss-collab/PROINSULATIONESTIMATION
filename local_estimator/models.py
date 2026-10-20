@@ -51,7 +51,7 @@ class MaterialItem(_Dictable):
     quantity: float
     unit_price: float
     total_price: float
-    category: str  # "insulation" | "jacket" | "mastic" | "accessories"
+    category: str  # "insulation" | "facing" (factory, no labor) | "jacket" (field-applied) | "mastic" | "accessories"
     system_type: str = ""  # run type this line belongs to; drives labor rates
     item_id: str = ""  # MeasurementItem.item_id this line came from (traceability)
 

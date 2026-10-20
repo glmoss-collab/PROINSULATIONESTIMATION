@@ -93,7 +93,7 @@ class MaterialItem:
     quantity: float
     unit_price: float
     total_price: float
-    category: str  # "insulation", "jacket", "mastic", "accessories"
+    category: str  # "insulation", "facing" (factory-applied, no labor), "jacket" (field-applied), "mastic", "accessories"
     system_type: str = ""  # "duct" / "pipe" of the run this item belongs to (drives labor rates)
 
 
@@ -746,9 +746,13 @@ class PricingEngine:
 
         square_feet = self._surface_area_sf(measurement, spec, self._insulated_length(measurement))
 
+        # Field-applied jacket -> "jacket" (carries jacketing labor). Factory-applied facing (FSK/ASJ comes on the
+        # insulation product) -> "facing": a material line only, its install time is already in insulation labor.
+        category = "facing"
         if "aluminum_jacket" in spec.special_requirements:
             description = f"Aluminum Jacketing - {measurement.size}"
             price_key = "aluminum_jacket"
+            category = "jacket"
         else:
             facing_description = spec.facing or "Facing"
             description = f"{facing_description} Facing - {measurement.size}"
@@ -761,7 +765,7 @@ class PricingEngine:
             price_key = "fsk_facing"
             base_price = self._lookup_price(price_key)
         if base_price is None:
-            return self._unpriced(description, "SF", square_feet, "jacket", measurement.system_type,
+            return self._unpriced(description, "SF", square_feet, category, measurement.system_type,
                                   price_key, measurement.item_id)
 
         unit_price = base_price * self.markup
@@ -771,7 +775,7 @@ class PricingEngine:
             quantity=square_feet,
             unit_price=unit_price,
             total_price=square_feet * unit_price,
-            category="jacket",
+            category=category,
             system_type=measurement.system_type,
         )
 
@@ -839,7 +843,7 @@ class PricingEngine:
                 )
                 rate = self.labor_rates["duct_insulation" if is_duct else "pipe_insulation"]
                 total_hours += material.quantity * rate
-            elif material.category == "jacket":
+            elif material.category == "jacket":  # field-applied only; "facing" carries no extra labor
                 total_hours += material.quantity * self.labor_rates["jacketing"]
             elif material.category == "mastic":
                 total_hours += material.quantity * self.labor_rates["mastic"]

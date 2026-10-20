@@ -73,13 +73,17 @@ class PricingEngine:
         return materials
 
     def calculate_labor(self, materials: List[MaterialItem]) -> Tuple[float, float]:
-        """(hours, dollars). Insulation hours/LF by system type; jacket and mastic hours/SF; +20% overhead."""
+        """(hours, dollars). Insulation hours/LF by system type; field jacket and mastic hours/SF; +20% overhead.
+
+        Factory-applied facing ("facing" category) adds NO hours: it is installed as part of the insulation, whose
+        hours/LF already cover it. Charging it again was the old double count (labor came out ~9x materials).
+        """
         hours = 0.0
         rates = self.labor_hours_per_unit
         for item in materials:
             if item.category == "insulation":
                 hours += item.quantity * rates["duct_insulation" if item.system_type == "duct" else "pipe_insulation"]
-            elif item.category == "jacket":
+            elif item.category == "jacket":  # field-applied jackets only
                 hours += item.quantity * rates["jacketing"]
             elif item.category == "mastic":
                 hours += item.quantity * rates["mastic"]
@@ -155,16 +159,19 @@ class PricingEngine:
         return None if facing in NO_FACING else f"{facing}_facing"
 
     def _jacket_line(self, m: MeasurementItem, spec: InsulationSpec) -> MaterialItem:
+        """Field-applied jacket -> category "jacket" (jacketing labor). Factory facing (FSK/ASJ, any *_facing key) ->
+        category "facing": material only, because it arrives on the insulation product and is installed with it."""
         key = self._jacket_key(spec) or ""
+        category = "jacket" if key in JACKET_REQUIREMENTS else "facing"
         description = f"{key.replace('_', ' ').title()} - {m.size}"
         parsed = parse_size(m.size)
         if parsed is None:
-            return self._flag(m, description, "SF", 0.0, "jacket", f"size '{m.size}' unparseable, cannot compute jacket area")
+            return self._flag(m, description, "SF", 0.0, category, f"size '{m.size}' unparseable, cannot compute jacket area")
         area = surface_area_sf(parsed, spec.thickness, self._insulated_length(m))
         price = self._price(key)
         if price is None:
-            return self._flag(m, description, "SF", area, "jacket", f"price book has no '{key}'")
-        return self._line(m, description, "SF", area, price, "jacket")
+            return self._flag(m, description, "SF", area, category, f"price book has no '{key}'")
+        return self._line(m, description, "SF", area, price, category)
 
     def _mastic_line(self, m: MeasurementItem, spec: InsulationSpec) -> MaterialItem:
         parsed = parse_size(m.size)

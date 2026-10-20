@@ -32,7 +32,7 @@ def test_fittings_are_additive_not_multiplicative():
 def test_rectangular_duct_uses_perimeter():
     engine = PricingEngine()
     mats = engine.calculate_materials([duct("18x12")], [duct_spec()])
-    jacket = next(m for m in mats if m.category == "jacket")
+    jacket = next(m for m in mats if m.category == "facing")
     assert jacket.quantity == pytest.approx(2 * (18 + 12 + 4 * 1.5) / 12 * 100)  # 300 SF, was 549.8
 
 
@@ -40,7 +40,7 @@ def test_round_duct_and_pipe_use_circumference():
     engine = PricingEngine()
     spec = InsulationSpec("pipe", "all", 1.0, "elastomeric", facing="ASJ")
     pipe = MeasurementItem("P-1", "pipe", '4"', 50.0, "indoor")
-    jacket = next(m for m in engine.calculate_materials([pipe], [spec]) if m.category == "jacket")
+    jacket = next(m for m in engine.calculate_materials([pipe], [spec]) if m.category == "facing")
     assert jacket.quantity == pytest.approx(math.pi * (4 + 2) / 12 * 50)
 
 
@@ -105,3 +105,20 @@ def test_calculate_pricing_tool_runs_end_to_end():
     # fiberglass_1.5 = $4.50/LF x 1.15 markup x 100 LF
     insulation = next(m for m in result["materials"] if m["category"] == "insulation")
     assert insulation["total_price"] == pytest.approx(4.50 * 1.15 * 100, abs=0.01)
+
+
+def test_factory_facing_adds_no_labor_but_field_jacket_does():
+    """FSK/ASJ ships on the insulation; only field-applied jackets carry jacketing hours (no double count)."""
+    engine = PricingEngine()
+    bare = engine.calculate_labor(engine.calculate_materials([duct()], [duct_spec(facing=None)]))[0]
+    faced_mats = engine.calculate_materials([duct()], [duct_spec(facing="FSK")])
+    assert any(m.category == "facing" and m.total_price > 0 for m in faced_mats)  # still bought/priced
+    assert engine.calculate_labor(faced_mats)[0] == pytest.approx(bare)
+
+    pipe = MeasurementItem("P-1", "pipe", '2"', 50.0, "Roof")
+    plain = InsulationSpec("pipe", "all", 1.0, "elastomeric", location="outdoor")
+    jacketed = InsulationSpec("pipe", "all", 1.0, "elastomeric", special_requirements=["aluminum_jacket"], location="outdoor")
+    plain_hours = engine.calculate_labor(engine.calculate_materials([pipe], [plain]))[0]
+    jacket_mats = engine.calculate_materials([pipe], [jacketed])
+    area = next(m.quantity for m in jacket_mats if m.category == "jacket")
+    assert engine.calculate_labor(jacket_mats)[0] == pytest.approx(plain_hours + area * engine.labor_rates["jacketing"] * 1.2)
