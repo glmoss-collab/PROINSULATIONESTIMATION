@@ -114,7 +114,7 @@ class InsulationSpecExtracted(BaseModel):
 
         return list(set(normalized))  # Remove duplicates
 
-    @root_validator
+    @root_validator(skip_on_failure=True)
     def check_outdoor_requirements(cls, values):
         """Validate outdoor specs have appropriate protection."""
         location = values.get('location')

@@ -1,0 +1,5 @@
+SECTION 23 07 13 - DUCT INSULATION
+Supply and return duct insulation shall be 1.5 inch fiberglass with FSK facing.
+SECTION 23 07 19 - PIPING INSULATION
+Chilled water pipe 1/2 to 2 inch shall be 1 inch elastomeric.
+Exterior piping shall be 1 inch elastomeric with aluminum jacket and stainless steel bands.

@@ -1,0 +1,4 @@
+system_type,size_range,thickness,material,facing,special_requirements,location
+duct,all,1.5,fiberglass,FSK,,indoor
+pipe,1/2-2 inch,1.0,elastomeric,,,indoor
+pipe,1/2-2 inch,1.0,elastomeric,,aluminum_jacket;stainless_bands,outdoor

@@ -1,0 +1,5 @@
+item_id,system_type,size,length,location,elbows,tees
+DUCT-001,duct,18x12,125.5,Main corridor,3,1
+DUCT-002,duct,24x18,85.0,North wing,2,0
+PIPE-001,pipe,2",75.0,Exterior wall,4,2
+PIPE-002,pipe,1.5",45.5,Mechanical room,1,0
